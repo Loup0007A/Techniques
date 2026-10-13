@@ -1,0 +1,1078 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SID Quest — Techniques</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --nuit:#12152E;--nuit2:#1A1E40;--nuit3:#262B58;--trait:#363D72;
+  --texte:#EEF0FF;--doux:#A5AAD8;--pale:#6E74A8;
+  --vert:#3FD2A6;--soufre:#F5C842;--uv:#A890FF;--rouge:#FF6B6B;--cuivre:#FF9F5A;
+  --acc:var(--cuivre);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--nuit);color-scheme:dark}
+body{min-height:100vh;color:var(--texte);font:16px/1.6 Figtree,system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(1000px 520px at 50% -240px,color-mix(in srgb,var(--acc) 20%,transparent),transparent 72%) no-repeat,var(--nuit)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.hidden{display:none!important}
+
+/* Barre */
+.barre{display:flex;align-items:center;gap:18px;padding:14px clamp(16px,4vw,40px);position:sticky;top:0;z-index:10;
+  background:color-mix(in srgb,var(--nuit) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid color-mix(in srgb,var(--trait) 55%,transparent)}
+.marque{font:800 16px/1 Unbounded,sans-serif;text-decoration:none;display:flex;align-items:center;gap:10px;white-space:nowrap}
+.marque::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--acc);box-shadow:0 0 14px var(--acc)}
+.fil{display:flex;gap:8px;align-items:center;color:var(--doux);font-size:14px;flex-wrap:wrap;min-width:0}
+.fil a{text-decoration:none}.fil a:hover{color:var(--texte)}
+.fil .sep{color:var(--pale)}
+.chrono{margin-left:auto;font:700 15px/1 Unbounded,sans-serif;font-variant-numeric:tabular-nums;padding:9px 14px;border-radius:999px;background:var(--nuit2);border:1px solid var(--trait)}
+.chrono.alerte{color:var(--rouge);border-color:var(--rouge)}
+
+main{max-width:1120px;margin:0 auto;padding:clamp(28px,5vw,64px) clamp(16px,4vw,40px) 80px}
+h1{font:800 clamp(32px,6vw,62px)/1.04 Unbounded,sans-serif;letter-spacing:-.02em}
+h2{font:700 19px/1.25 Unbounded,sans-serif;letter-spacing:-.01em}
+h3{font:700 16px/1.3 Unbounded,sans-serif}
+.chapo{color:var(--doux);font-size:clamp(16px,1.6vw,18px);max-width:62ch;margin-top:18px}
+
+/* Boutons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;font:700 15px/1 Figtree,sans-serif;padding:14px 22px;border-radius:999px;background:var(--acc);color:var(--nuit);text-decoration:none;transition:filter .15s}
+.btn:hover:not(:disabled){filter:brightness(1.1)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.second{background:transparent;color:var(--texte);box-shadow:inset 0 0 0 1.5px var(--trait)}
+.btn.second:hover{box-shadow:inset 0 0 0 1.5px var(--acc)}
+.btn.petit{padding:9px 14px;font-size:14px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+
+/* Carte des niveaux */
+.tete{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap}
+.etat{display:grid;gap:8px;min-width:min(320px,100%);color:var(--doux);font-size:14px}
+.jauge{height:8px;border-radius:9px;background:var(--nuit3);overflow:hidden}
+.jauge i{display:block;height:100%;background:var(--acc);border-radius:9px}
+.identite{max-width:640px}
+form.rep.gauche{justify-content:flex-start;margin-top:30px}
+form.rep.gauche input{flex:1 1 280px;text-align:left}
+.message.gauche{text-align:left}
+.bandeau{margin-top:28px;padding:14px 18px;border-radius:14px;background:color-mix(in srgb,var(--rouge) 9%,var(--nuit2));border:1px solid color-mix(in srgb,var(--rouge) 45%,transparent);color:#FFD3D3}
+.carte{position:relative;aspect-ratio:1;max-width:760px;margin:44px auto 0}
+.carte svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.noeud{position:absolute;width:7%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;display:grid;place-items:center;
+  font:700 clamp(9px,1.45vw,14px)/1 Unbounded,sans-serif;text-decoration:none;background:var(--nuit2);border:1.5px solid var(--trait);color:var(--pale);transition:transform .15s}
+.noeud.palier{width:8.6%;border-width:2.5px}
+.noeud.ok{background:var(--acc);border-color:var(--acc);color:var(--nuit)}
+.noeud.libre{color:var(--texte);border-color:color-mix(in srgb,var(--acc) 55%,var(--trait))}
+.noeud.ouvert{border-color:var(--acc);color:var(--texte);box-shadow:0 0 0 6px color-mix(in srgb,var(--acc) 22%,transparent)}
+a.noeud:hover{transform:translate(-50%,-50%) scale(1.14)}
+.legende{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;color:var(--doux);font-size:13px;margin-top:26px}
+.legende span{display:inline-flex;align-items:center;gap:7px}
+.legende i{width:12px;height:12px;border-radius:50%;display:inline-block;border:1.5px solid var(--trait);background:var(--nuit2)}
+.legende i.ok{background:var(--acc);border-color:var(--acc)}
+.legende i.ouvert{border-color:var(--acc)}
+
+/* Ateliers (accueil) */
+.section{margin-top:84px}
+.section > p{color:var(--doux);margin-top:8px;max-width:62ch}
+.ateliers{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:26px}
+.atelier{background:var(--nuit2);border:1px solid var(--trait);border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:8px}
+.atelier p{color:var(--doux);font-size:14px;line-height:1.5}
+.atelier .des{margin-top:auto;font-size:13px;color:var(--pale);display:flex;align-items:center;gap:8px}
+.atelier .des::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--nuit3)}
+.atelier.ouvert .des{color:var(--acc)}
+.atelier.ouvert .des::before{background:var(--acc)}
+.pic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--acc) 14%,var(--nuit));color:var(--acc)}
+.pic svg{width:22px;height:22px}
+
+/* Intro de niveau */
+.nv-tete{display:flex;align-items:flex-end;gap:clamp(18px,4vw,44px);flex-wrap:wrap}
+.gros{font:800 clamp(96px,19vw,210px)/.8 Unbounded,sans-serif;color:var(--acc);letter-spacing:-.05em}
+.nv-tete h1{font-size:clamp(26px,4vw,40px)}
+.nv-tete p{color:var(--doux);margin-top:6px}
+.diff{display:flex;gap:4px;margin-top:14px}
+.diff i{width:18px;height:6px;border-radius:4px;background:var(--nuit3)}
+.diff i.on{background:var(--acc)}
+.fiche{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;margin-top:44px;align-items:start}
+@media(max-width:760px){.fiche{grid-template-columns:1fr}}
+.bloc{background:var(--nuit2);border:1px solid var(--trait);border-radius:20px;padding:24px}
+.bloc h2{font-size:16px;margin-bottom:14px}
+.bloc.danger{background:color-mix(in srgb,var(--rouge) 7%,var(--nuit2));border-color:color-mix(in srgb,var(--rouge) 45%,transparent)}
+.puces{list-style:none;display:grid;gap:9px}
+.puces li{padding-left:22px;position:relative;color:#D9DCF6}
+.puces li::before{content:"";position:absolute;left:2px;top:.62em;width:8px;height:8px;border-radius:50%;background:var(--acc)}
+.danger .puces li::before{background:var(--rouge)}
+.parcours{list-style:none;display:grid;gap:10px;counter-reset:p}
+.parcours li{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center;background:var(--nuit);border:1px solid var(--trait);border-radius:14px;padding:12px 14px;counter-increment:p}
+.parcours li::before{content:counter(p);grid-row:span 2;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:700 13px/1 Unbounded,sans-serif;background:var(--nuit3);color:var(--acc)}
+.parcours b{font-weight:700}
+.parcours span{color:var(--doux);font-size:14px}
+
+/* Circuit */
+.scene{max-width:820px;margin:0 auto}
+.eh{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--doux);font-size:14px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.eh b{color:var(--texte);font:700 14px Unbounded,sans-serif}
+.etapes{display:flex;gap:6px;margin:14px 0 30px}
+.etapes i{flex:1;height:6px;border-radius:9px;background:var(--nuit3)}
+.etapes i.cours{background:color-mix(in srgb,var(--acc) 45%,var(--nuit3))}
+.etapes i.ok{background:var(--acc)}
+.etapes i.ko{background:var(--rouge)}
+.consigne{max-width:620px;margin:0 auto}
+.consigne .pic{width:54px;height:54px;border-radius:16px;margin-bottom:18px}
+.consigne .pic svg{width:30px;height:30px}
+.consigne h2{font-size:clamp(24px,3.4vw,32px)}
+.consigne > p{color:var(--doux);margin:8px 0 22px;font-size:17px}
+.seuil{margin-top:16px;padding:12px 16px;border-radius:14px;background:color-mix(in srgb,var(--acc) 9%,var(--nuit));border:1px solid color-mix(in srgb,var(--acc) 40%,transparent);font-weight:600}
+.decompte{display:grid;place-items:center;height:clamp(300px,50vh,420px);font:800 clamp(90px,16vw,160px)/1 Unbounded,sans-serif;color:var(--acc);animation:pop .6s ease-out infinite}
+@keyframes pop{from{transform:scale(1.25);opacity:.2}to{transform:scale(1);opacity:1}}
+.hud{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--doux);font-size:14px;font-variant-numeric:tabular-nums;margin-bottom:12px}
+.hud b{color:var(--texte)}
+.barre-t{height:6px;background:var(--nuit3);border-radius:9px;overflow:hidden;margin:0 0 22px}
+.barre-t i{display:block;height:100%;background:var(--acc);transition:width .1s linear}
+.message{min-height:28px;text-align:center;color:var(--doux);margin-top:14px;font-weight:600}
+.message.mal{color:var(--rouge)}.message.bien{color:var(--vert)}
+
+/* Précision */
+.arene{position:relative;height:clamp(300px,54vh,460px);border-radius:20px;background:
+  radial-gradient(circle at 50% 50%,transparent 0 30%,color-mix(in srgb,var(--trait) 30%,transparent) 30.2% 30.6%,transparent 30.8%),
+  linear-gradient(var(--nuit2),var(--nuit2));border:1px solid var(--trait);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.arene.faute{animation:faute .25s}
+@keyframes faute{from{box-shadow:inset 0 0 0 3px var(--rouge)}to{box-shadow:inset 0 0 0 0 transparent}}
+.cible{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,var(--acc) 0 18%,var(--nuit) 19% 38%,var(--acc) 39% 58%,var(--nuit) 59% 72%,var(--acc) 73%);box-shadow:0 0 18px color-mix(in srgb,var(--acc) 50%,transparent)}
+.cible::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid var(--acc);animation:vie var(--vie) linear forwards}
+@keyframes vie{from{transform:scale(1.9);opacity:.15}to{transform:scale(1);opacity:.95}}
+.impact{position:absolute;width:30px;height:30px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--vert);animation:impact .4s ease-out forwards;pointer-events:none}
+.impact.rate{border-color:var(--rouge)}
+@keyframes impact{to{transform:translate(-50%,-50%) scale(2.2);opacity:0}}
+
+/* Pad (réflexes, rythme, horloge) */
+.pad{display:grid;place-items:center;text-align:center;height:clamp(280px,48vh,420px);border-radius:24px;padding:20px;font:800 clamp(22px,4vw,38px)/1.2 Unbounded,sans-serif;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;background:var(--nuit2);border:1px solid var(--trait);transition:background .08s}
+.pad small{display:block;font:600 15px/1.5 Figtree,sans-serif;color:var(--doux);margin-top:10px}
+.pad.go{background:var(--vert);color:var(--nuit);border-color:var(--vert)}
+.pad.go small,.pad.nogo small{color:var(--nuit)}
+.pad.nogo{background:var(--rouge);color:var(--nuit);border-color:var(--rouge)}
+.pad.faute{box-shadow:inset 0 0 0 3px var(--rouge)}
+.metro{width:min(250px,62vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;border:3px solid var(--trait);background:var(--nuit);font:800 clamp(30px,6vw,46px)/1 Unbounded,sans-serif;font-variant-numeric:tabular-nums;transition:transform .12s ease-out,background .12s,border-color .12s}
+.metro.bat{transform:scale(1.08);background:var(--acc);border-color:var(--acc);color:var(--nuit);transition:none}
+.metro.tape{border-color:var(--vert)}
+.distrait{font:700 clamp(40px,8vw,72px)/1 "JetBrains Mono",monospace;color:var(--pale)}
+
+/* Mémoire */
+.simon{display:grid;gap:10px;width:min(420px,100%);margin:0 auto}
+.simon button{aspect-ratio:1;border-radius:18px;background:var(--nuit2);border:1.5px solid var(--trait);cursor:pointer;transition:background .12s,box-shadow .12s;touch-action:manipulation}
+.simon button.flash{background:var(--acc);border-color:var(--acc);box-shadow:0 0 28px color-mix(in srgb,var(--acc) 60%,transparent);transition:none}
+.simon button.tap{background:color-mix(in srgb,var(--vert) 70%,var(--nuit2));transition:none}
+.simon button.err{background:var(--rouge);transition:none}
+.simon.attente button{cursor:default}
+
+/* Calcul */
+.question{font:700 clamp(38px,7vw,64px)/1.2 Unbounded,sans-serif;text-align:center;font-variant-numeric:tabular-nums;margin:18px 0 6px;min-height:80px}
+form.rep{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;justify-content:center}
+form.rep input{flex:0 1 300px;min-width:0;background:var(--nuit);border:1.5px solid var(--trait);border-radius:999px;padding:14px 20px;color:var(--texte);font:600 20px Figtree,sans-serif;outline:none;text-align:center}
+form.rep input:focus{border-color:var(--acc)}
+.aide{color:var(--doux);font-size:14px;margin-top:16px}
+
+/* Frappe */
+.texte-cible{font:500 clamp(17px,2.2vw,21px)/1.8 "JetBrains Mono",monospace;background:var(--nuit2);border:1px solid var(--trait);border-radius:18px;padding:20px 22px;color:var(--pale);user-select:none;-webkit-user-select:none;word-break:break-word}
+.texte-cible .ok{color:var(--texte)}
+.texte-cible .ko{color:var(--rouge);background:color-mix(in srgb,var(--rouge) 18%,transparent);border-radius:3px}
+.texte-cible .cur{box-shadow:-2px 0 0 var(--acc)}
+textarea.saisie{width:100%;min-height:120px;margin-top:16px;background:var(--nuit);border:1.5px solid var(--trait);border-radius:18px;padding:16px 18px;color:var(--texte);font:500 18px/1.6 "JetBrains Mono",monospace;resize:vertical;outline:none}
+textarea.saisie:focus{border-color:var(--acc)}
+
+/* Œil */
+.grille{display:grid;gap:6px;width:min(460px,100%);aspect-ratio:1;margin:0 auto}
+.grille button{border:0;border-radius:10px;cursor:pointer;touch-action:manipulation}
+.grille button.vu{outline:3px solid var(--vert);outline-offset:-3px}
+.grille button.err{outline:3px solid var(--rouge);outline-offset:-3px}
+
+/* Tracé */
+canvas.trace{display:block;width:100%;border-radius:20px;background:var(--nuit2);border:1px solid var(--trait);touch-action:none;cursor:crosshair}
+
+/* Bilan d'atelier */
+.bilan{max-width:560px;margin:10px auto 0;text-align:center}
+.bilan .etiq{display:inline-block;font:700 13px/1 Unbounded,sans-serif;padding:8px 12px;border-radius:999px;background:color-mix(in srgb,var(--vert) 16%,var(--nuit));color:var(--vert)}
+.bilan .etiq.ko{background:color-mix(in srgb,var(--rouge) 16%,var(--nuit));color:var(--rouge)}
+.bilan h2{font-size:clamp(24px,3.4vw,32px);margin-top:16px}
+.bilan .mesure{color:var(--doux);margin-top:8px;font-size:17px}
+.bilan .pts{font:800 clamp(60px,12vw,96px)/1 Unbounded,sans-serif;color:var(--acc);margin-top:18px;letter-spacing:-.03em}
+.bilan .pts small{font-size:.3em;color:var(--pale);letter-spacing:0}
+.bilan .actions{justify-content:center}
+
+/* Résultat */
+.resultat{max-width:660px;margin:10px auto 0;text-align:center}
+.resultat h1{font-size:clamp(28px,5vw,44px)}
+.score{font:800 clamp(90px,18vw,150px)/1 Unbounded,sans-serif;letter-spacing:-.04em;margin:22px 0 6px;color:var(--acc)}
+.score small{font-size:.28em;color:var(--pale);letter-spacing:0}
+.resultat .actions{justify-content:center}
+.recap{list-style:none;display:grid;gap:8px;margin-top:26px;text-align:left}
+.recap li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:var(--nuit2);border:1px solid var(--trait);border-radius:14px;padding:10px 14px}
+.recap .st{width:10px;height:10px;border-radius:50%;background:var(--vert)}
+.recap .st.ko{background:var(--rouge)}.recap .st.na{background:var(--nuit3)}
+.recap span{color:var(--doux);font-size:14px}
+.recap b.p{font:700 15px Unbounded,sans-serif;font-variant-numeric:tabular-nums}
+.resultat details{text-align:left;margin-top:30px;font-size:12px;color:var(--pale)}
+.resultat code{display:block;word-break:break-all;background:var(--nuit2);padding:12px;border-radius:12px;margin-top:8px}
+
+@media (prefers-reduced-motion:reduce){.decompte,.cible::after,.impact{animation:none!important}.metro,.btn{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="barre">
+  <a class="marque" data-nav="/" href="/">SID Quest</a>
+  <nav class="fil" id="fil" aria-label="Fil d'Ariane"></nav>
+  <div class="chrono hidden" id="timer" aria-live="off">60:00</div>
+</header>
+<main id="app"></main>
+
+<script>
+/* ===================== CONFIGURATION ===================== */
+const CONFIG = {
+  API_URL: "https://sid-quest.vercel.app/api",
+  EPREUVE: "techniques",
+  EPREUVE_NUM: 4,              // Potions = 1, Énigmes = 2, Problème = 3
+  NB_NIVEAUX: 100,
+  DUREE_MAX_MIN: 60,           // durée max d'une tentative
+  COOLDOWN_MIN: 120,           // attente après chaque tentative, réussie ou non
+  INVALIDER_SUR_BLUR: true,    // perte de focus = page quittée
+  TOUT_DEBLOQUE: false,        // true = niveaux accessibles sans réussir le précédent
+  ROUTAGE: "auto",             // "path" (/42), "hash" (#/42) ou "auto"
+  BASE: "",                    // préfixe si le site n'est pas à la racine, ex. "/techniques"
+  SEL: "sid-quest-v2"
+};
+const NB = CONFIG.NB_NIVEAUX;
+const RESERVES = ["epreuve","epreuve_num","niveau","statut","reussi","score","raison","details","session","debut","fin","duree_s","source","origine","parent","integre","ts","sig","email"];
+
+/* ===================== OUTILS ===================== */
+const $ = (s, r = document) => r.querySelector(s);
+const app = $("#app");
+const R = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = (a, rnd = Math.random) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+const clamp = (x, a = 0, b = 100) => Math.max(a, Math.min(b, x));
+const moyenne = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+const virgule = (x, d = 1) => (+x).toFixed(d).replace(".", ",").replace(/,0+$/, "");
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+const hm = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`; };
+const pl = (n, s, p = s + "s") => `${n} ${n > 1 ? p : s}`;
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const maintenant = () => performance.now();
+/* score de 0 à 100 où le seuil de validation vaut 70 */
+const scoreBas = (v, seuil) => Math.round(clamp(100 - 30 * v / seuil));
+const scoreHaut = (v, seuil) => Math.round(clamp(70 * v / seuil));
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const mem = {};
+const store = {
+  get(k) { try { const v = localStorage.getItem(k); return v == null ? (mem[k] ?? null) : JSON.parse(v); } catch (e) { return mem[k] ?? null; } },
+  set(k, v) { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { delete mem[k]; try { localStorage.removeItem(k); } catch (e) {} }
+};
+function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); }
+const K_ACTIF = "sqt_actif", K_PROG = "sqt_prog", K_CD = "sqt_cd", K_EMAIL = "sqt_email";
+const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const email = () => { const e = store.get(K_EMAIL); return typeof e === "string" && EMAIL_OK.test(e) ? e : ""; };
+const cooldown = () => Math.max(0, (store.get(K_CD) || 0) - Date.now());
+const prog = () => +(store.get(K_PROG) || 0);
+const debloque = n => CONFIG.TOUT_DEBLOQUE || n <= prog() + 1;
+function levenshtein(a, b) {
+  const m = a.length, n = b.length; let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+  return prev[n];
+}
+
+/* ===================== ROUTAGE ===================== */
+function modeHash() {
+  if (CONFIG.ROUTAGE === "hash") return true;
+  if (CONFIG.ROUTAGE === "path") return false;
+  return location.protocol === "file:" || /\.html?$/.test(location.pathname) || location.hash.startsWith("#/");
+}
+const lien = p => modeHash() ? "#" + p : CONFIG.BASE + p;
+function aller(p) {
+  if (modeHash()) { if (location.hash === "#" + p) rendre(); else location.hash = p; }
+  else { history.pushState(null, "", CONFIG.BASE + p); rendre(); }
+}
+function route() {
+  const brut = modeHash() ? location.hash.replace(/^#/, "") : location.pathname.slice(CONFIG.BASE.length);
+  const seg = brut.split("/").map(s => decodeURIComponent(s).replace(/\.$/, "")).filter(s => s && s !== "index.html" && s !== "techniques");
+  if (!seg.length) return { vue: "accueil" };
+  const n = Number(seg[seg.length === 2 && seg[0] === "niveau" ? 1 : 0]);
+  if (seg.length <= 2 && Number.isInteger(n) && n >= 1 && n <= NB && (seg.length === 1 || seg[0] === "niveau")) return { vue: "niveau", n };
+  return { vue: "inconnu" };
+}
+let ivVue = null;
+function rendre() {
+  clearInterval(ivVue);
+  const r = route();
+  majFil(r);
+  window.scrollTo(0, 0);
+  if (!email()) vueEmail();
+  else if (r.vue === "accueil") vueAccueil();
+  else if (r.vue === "niveau") vueIntro(r.n);
+  else vueInconnu();
+}
+function majFil(r) {
+  const f = $("#fil");
+  f.innerHTML = `<span class="sep">/</span><a data-nav="/" href="${lien("/")}">Techniques</a>` + (r && r.n ? `<span class="sep">/</span><span>Niveau ${r.n}</span>` : "");
+}
+document.addEventListener("click", ev => {
+  const a = ev.target.closest("a[data-nav]");
+  if (!a || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button !== 0) return;
+  ev.preventDefault(); aller(a.dataset.nav);
+});
+const surNavigation = () => { if (S && !S.fini) invalider("navigation", true); else rendre(); };
+window.addEventListener("popstate", surNavigation);
+window.addEventListener("hashchange", surNavigation);
+
+/* ===================== TRANSMISSION ===================== */
+function urlParent() {
+  if (window === window.top) return "direct";
+  try { if (document.referrer) return document.referrer; } catch (e) {}
+  try { if (location.ancestorOrigins && location.ancestorOrigins.length) return location.ancestorOrigins[0]; } catch (e) {}
+  return "inconnu";
+}
+const envoyes = new Set();
+let derniereUrl = "";
+function envoyer(r) {
+  if (envoyes.has(r.session)) return;
+  envoyes.add(r.session);
+  const p = new URLSearchParams();
+  for (const [k, v] of new URLSearchParams(location.search)) if (!RESERVES.includes(k)) p.set(k, v);
+  const data = {
+    epreuve: CONFIG.EPREUVE, epreuve_num: CONFIG.EPREUVE_NUM, niveau: r.n,
+    statut: r.statut, reussi: r.statut === "reussi" ? 1 : 0, score: r.score,
+    raison: r.raison || "", details: r.details || "", session: r.session,
+    debut: new Date(r.debut).toISOString(), fin: new Date(r.fin).toISOString(),
+    duree_s: Math.round((r.fin - r.debut) / 1000),
+    source: location.href, origine: location.origin, parent: urlParent(),
+    integre: window === window.top ? 0 : 1, ts: Date.now(), email: r.email || email()
+  };
+  for (const k in data) p.set(k, String(data[k]));
+  const canon = [...p.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([k, v]) => k + "=" + v).join("&");
+  p.set("sig", fnv(CONFIG.SEL + "|" + canon));
+  const url = CONFIG.API_URL + "?" + p.toString();
+  derniereUrl = url;
+  try { fetch(url, { method: "GET", mode: "no-cors", keepalive: true, credentials: "omit" }).catch(() => { new Image().src = url; }); }
+  catch (e) { new Image().src = url; }
+  try { window.parent.postMessage({ type: "sid-quest-resultat", ...data, sig: p.get("sig"), url }, "*"); } catch (e) {}
+}
+
+/* ===================== SESSION ===================== */
+let S = null;
+function lancer(n) {
+  if (!email() || !debloque(n) || cooldown() > 0) return rendre();
+  const now = Date.now();
+  S = { id: uid(), n, email: email(), debut: now, fini: false, armeA: now + 600, limite: now + CONFIG.DUREE_MAX_MIN * 60000, ivs: [] };
+  store.set(K_ACTIF, { id: S.id, n, email: S.email, debut: now });
+  store.set(K_CD, now + CONFIG.COOLDOWN_MIN * 60000);
+  $("#fil").classList.add("hidden");
+  const t = $("#timer"); t.classList.remove("hidden", "alerte"); t.textContent = mmss(S.limite - now);
+  S.ivs.push(setInterval(() => {
+    const rest = S.limite - Date.now();
+    t.textContent = mmss(rest); t.classList.toggle("alerte", rest < 5 * 60000);
+    if (rest <= 0) Circuit.expire();
+  }, 250));
+  window.scrollTo(0, 0);
+  Circuit.start(app, n);
+}
+function terminer({ statut, score = 0, details = "", raison = "", ateliers = [] }) {
+  if (!S || S.fini) return;
+  S.fini = true; S.ivs.forEach(clearInterval); arreterAtelier();
+  const fin = Date.now();
+  store.set(K_CD, fin + CONFIG.COOLDOWN_MIN * 60000);
+  store.del(K_ACTIF);
+  if (statut === "reussi" && S.n > prog()) store.set(K_PROG, S.n);
+  const r = { n: S.n, email: S.email, session: S.id, statut, score, details, raison, debut: S.debut, fin, ateliers };
+  envoyer(r);
+  $("#timer").classList.add("hidden"); $("#fil").classList.remove("hidden");
+  vueResultat(r);
+}
+function invalider(raison, force) {
+  if (S && !S.fini && (force || Date.now() > S.armeA)) {
+    const c = S.mod;
+    terminer({ statut: "invalide", score: 0, raison, details: "page_quittee" + (c ? ";" + c.details() : ""), ateliers: c ? c.res : [] });
+  }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) invalider("onglet_ou_fenetre_change"); });
+window.addEventListener("blur", () => { if (CONFIG.INVALIDER_SUR_BLUR) invalider("focus_perdu"); });
+window.addEventListener("pagehide", () => invalider("page_fermee", true));
+window.addEventListener("beforeunload", () => invalider("page_fermee", true));
+(function rattrapage() {
+  const a = store.get(K_ACTIF);
+  if (a && a.n) { store.del(K_ACTIF); envoyer({ n: a.n, email: a.email, session: a.id, statut: "invalide", score: 0, raison: "page_rechargee_ou_fermee", details: "page_quittee", debut: a.debut, fin: Date.now() }); }
+})();
+
+/* ===================== MOTEUR D'ATELIER ===================== */
+let AT = null;
+function demarrerAtelier(def, c, zone, onFin) {
+  const rt = { timers: [], keys: [], actif: true, audio: null };
+  AT = rt;
+  const vivant = () => rt.actif && S && !S.fini;
+  const ctx = {
+    zone, vivant,
+    every(f, ms) { const id = setInterval(() => { if (vivant()) f(); }, ms); rt.timers.push(["i", id]); return id; },
+    after(f, ms) { const id = setTimeout(() => { if (vivant()) f(); }, ms); rt.timers.push(["t", id]); return id; },
+    frame(f) { const loop = t => { if (!vivant()) return; if (f(t) !== false) requestAnimationFrame(loop); }; requestAnimationFrame(loop); },
+    key(f) { const h = e => { if (vivant()) f(e); }; document.addEventListener("keydown", h); rt.keys.push(h); },
+    audio(ac) { rt.audio = ac; },
+    fin(res) { if (!rt.actif) return; arreterAtelier(); onFin(res); }
+  };
+  def.run(ctx, c);
+}
+function arreterAtelier() {
+  if (!AT) return;
+  const rt = AT; AT = null; rt.actif = false;
+  rt.timers.forEach(([k, id]) => k === "i" ? clearInterval(id) : clearTimeout(id));
+  rt.keys.forEach(h => document.removeEventListener("keydown", h));
+  try { rt.audio && rt.audio.close(); } catch (e) {}
+}
+const estFrappe = e => (e.code === "Space" || e.key === " " || e.key === "Enter") && !e.repeat;
+
+/* ===================== ATELIERS ===================== */
+const ICONES = {
+  precision: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
+  reflexes: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  memoire: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor"/>',
+  calcul: '<path d="M5 7h6M8 4v6M14 7h6M5 17h6M14 15h6M14 19h6"/>',
+  frappe: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+  oeil: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  rythme: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  chrono: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>',
+  trace: '<path d="M3 17c3 0 3-10 6-10s3 10 6 10 3-10 6-10"/>'
+};
+const icone = id => `<span class="pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[id]}</svg></span>`;
+const dD = L => (L - 1) / 99;
+const dDe = (L, min) => (L - min) / (100 - min);
+
+/* --- Précision --- */
+const Precision = {
+  id: "precision", nom: "Précision", min: 1,
+  desc: "Touchez des cibles qui rétrécissent, s'échappent et ne restent qu'un instant.",
+  cfg: L => { const d = dD(L); return { n: Math.round(lerp(10, 30, d)), r: Math.round(lerp(30, 11, d)), vie: Math.round(lerp(2200, 750, d)), vitesse: L >= 30 ? Math.round(lerp(0, 170, (L - 30) / 70)) : 0, seuil: Math.round(lerp(70, 90, d)) }; },
+  consignes: c => [`${c.n} cibles apparaissent l'une après l'autre`, `Chaque cible reste ${virgule(c.vie / 1000)} s : l'anneau se referme quand elle va disparaître`, c.vitesse ? "Les cibles se déplacent" : "Les cibles sont immobiles", "Toucher à côté retire une demi-cible"],
+  seuil: c => `Score d'au moins ${c.seuil} %`,
+  run(ctx, c) {
+    ctx.zone.innerHTML = `<div class="hud"><span>Cible <b id="pn">0</b> / ${c.n}</span><span>Touchées <b id="ph">0</b> · À côté <b id="pf">0</b></span></div><div class="arene" id="ar"></div>`;
+    const ar = $("#ar"), W = () => ar.clientWidth, H = () => ar.clientHeight;
+    let i = 0, hits = 0, fautes = 0, cur = null, last = 0;
+    const majHud = () => { $("#pn").textContent = i; $("#ph").textContent = hits; $("#pf").textContent = fautes; };
+    const impact = (x, y, rate) => { ar.insertAdjacentHTML("beforeend", `<div class="impact ${rate ? "rate" : ""}" style="left:${x}px;top:${y}px"></div>`); const el = ar.lastElementChild; setTimeout(() => el.remove(), 450); };
+    const finir = () => {
+      const score = Math.round(clamp((hits - fautes / 2) / c.n * 100));
+      ctx.fin({ score, reussi: score >= c.seuil, mesure: `${hits} / ${c.n} cibles touchées, ${pl(fautes, "tir")} à côté`, code: `${score}%,${hits}/${c.n},f${fautes}` });
+    };
+    const suivante = () => {
+      if (i >= c.n) return finir();
+      i++; majHud();
+      const r = c.r, x = R(r + 8, Math.max(r + 9, W() - r - 8)), y = R(r + 8, Math.max(r + 9, H() - r - 8)), a = Math.random() * Math.PI * 2;
+      const el = document.createElement("div");
+      el.className = "cible"; el.style.cssText = `width:${2 * r}px;height:${2 * r}px;left:${x}px;top:${y}px;--vie:${c.vie}ms`;
+      ar.appendChild(el);
+      const me = cur = { el, x, y, vx: Math.cos(a) * c.vitesse, vy: Math.sin(a) * c.vitesse };
+      ctx.after(() => { if (cur === me) { el.remove(); cur = null; impact(me.x, me.y, true); ctx.after(suivante, 260); } }, c.vie);
+    };
+    ar.addEventListener("pointerdown", e => {
+      if (!ctx.vivant()) return;
+      e.preventDefault();
+      const b = ar.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
+      if (cur && Math.hypot(px - cur.x, py - cur.y) <= c.r + 3) {
+        hits++; cur.el.remove(); impact(cur.x, cur.y, false); cur = null; majHud(); ctx.after(suivante, 220);
+      } else { fautes++; majHud(); ar.classList.remove("faute"); void ar.offsetWidth; ar.classList.add("faute"); impact(px, py, true); }
+    });
+    ctx.frame(t => {
+      const dt = last ? Math.min(0.05, (t - last) / 1000) : 0; last = t;
+      if (cur && c.vitesse) {
+        cur.x += cur.vx * dt; cur.y += cur.vy * dt;
+        if (cur.x < c.r || cur.x > W() - c.r) { cur.vx *= -1; cur.x = clamp(cur.x, c.r, W() - c.r); }
+        if (cur.y < c.r || cur.y > H() - c.r) { cur.vy *= -1; cur.y = clamp(cur.y, c.r, H() - c.r); }
+        cur.el.style.left = cur.x + "px"; cur.el.style.top = cur.y + "px";
+      }
+    });
+    ctx.after(suivante, 300);
+  }
+};
+
+/* --- Réflexes --- */
+const Reflexes = {
+  id: "reflexes", nom: "Réflexes", min: 1,
+  desc: "Réagissez dès que le signal passe au vert, et retenez-vous quand il est rouge.",
+  cfg: L => { const d = dD(L); return { essais: Math.round(lerp(5, 10, d)), seuil: Math.round(lerp(480, 290, d)), nogo: L >= 40 ? 0.3 : 0, fautesMax: L < 50 ? 1 : 0 }; },
+  consignes: c => [`${pl(c.essais, "signal vert", "signaux verts")} à attraper`, "Touchez le pad ou appuyez sur Espace dès qu'il devient vert", "Toucher avant le vert est un faux départ", c.nogo ? "Parfois le pad devient rouge : ne touchez surtout pas" : null, `Au plus ${pl(c.fautesMax, "faute")} permise${c.fautesMax > 1 ? "s" : ""}`],
+  seuil: c => `Temps de réaction moyen d'au plus ${c.seuil} ms`,
+  run(ctx, c) {
+    ctx.zone.innerHTML = `<div class="hud"><span>Signal <b id="rn">0</b> / ${c.essais}</span><span>Fautes <b id="rf">0</b></span></div><div class="pad" id="pad" role="button" tabindex="-1">Préparez-vous<small>Le pad va passer au vert</small></div>`;
+    const pad = $("#pad"), temps = [];
+    let etat = "pause", t0 = 0, fautes = 0, tm = null, nogoSuite = 0;
+    const aff = (cls, txt, sous = "") => { pad.className = "pad " + cls; pad.innerHTML = txt + (sous ? `<small>${sous}</small>` : ""); };
+    const maj = () => { $("#rn").textContent = temps.length; $("#rf").textContent = fautes; };
+    const suivant = () => temps.length >= c.essais ? finir() : essai();
+    const essai = () => {
+      etat = "attente"; aff("", "Attendez…", "Pas encore");
+      tm = ctx.after(() => {
+        if (c.nogo && nogoSuite < 2 && Math.random() < c.nogo) {
+          nogoSuite++; etat = "nogo"; aff("nogo", "Ne touchez pas", "Retenez-vous");
+          tm = ctx.after(() => { etat = "pause"; aff("", "Bien retenu", ""); ctx.after(suivant, 500); }, 1000);
+        } else {
+          nogoSuite = 0; etat = "go"; t0 = maintenant(); aff("go", "Maintenant !");
+          tm = ctx.after(() => { if (etat !== "go") return; etat = "pause"; temps.push(1500); maj(); aff("", "Trop lent", "1 500 ms comptées"); ctx.after(suivant, 800); }, 1500);
+        }
+      }, R(1200, 3600));
+    };
+    const appui = () => {
+      if (etat === "attente") { clearTimeout(tm); fautes++; maj(); etat = "pause"; aff("faute", "Faux départ", "Attendez le vert"); ctx.after(essai, 1000); }
+      else if (etat === "go") { const rt = Math.round(maintenant() - t0); clearTimeout(tm); temps.push(rt); maj(); etat = "pause"; aff("", `${rt} ms`, rt <= c.seuil ? "Dans le temps" : "Un peu lent"); ctx.after(suivant, 800); }
+      else if (etat === "nogo") { clearTimeout(tm); fautes++; maj(); etat = "pause"; aff("faute", "Raté", "Le rouge veut dire stop"); ctx.after(suivant, 1000); }
+    };
+    const finir = () => {
+      const moy = Math.round(moyenne(temps)), score = Math.round(clamp(scoreBas(moy, c.seuil) - 12 * fautes));
+      ctx.fin({ score, reussi: moy <= c.seuil && fautes <= c.fautesMax, mesure: `Moyenne de ${moy} ms, meilleur temps ${Math.min(...temps)} ms, ${pl(fautes, "faute")}`, code: `${score}%,${moy}ms,f${fautes}` });
+    };
+    pad.addEventListener("pointerdown", e => { e.preventDefault(); if (ctx.vivant()) appui(); });
+    ctx.key(e => { if (estFrappe(e)) { e.preventDefault(); appui(); } });
+    ctx.after(essai, 900);
+  }
+};
+
+/* --- Mémoire --- */
+const Memoire = {
+  id: "memoire", nom: "Mémoire", min: 1,
+  desc: "Reproduisez une séquence lumineuse qui s'allonge à chaque tour.",
+  cfg: L => { const d = dD(L); return { taille: L < 60 ? 3 : 4, cible: Math.round(lerp(4, 12, d)), flash: Math.round(lerp(650, 300, d)), vies: L < 50 ? 2 : 1, inverse: L >= 75 }; },
+  consignes: c => [`Grille de ${c.taille} × ${c.taille} cases`, "Regardez la séquence, puis touchez les cases dans le même ordre", c.inverse ? "Attention : reproduisez la séquence à l'envers, de la dernière case à la première" : null, "La séquence gagne une case à chaque tour réussi", c.vies > 1 ? "Une erreur est pardonnée (la séquence est rejouée) ; la deuxième arrête l'atelier" : "La première erreur arrête l'atelier"],
+  seuil: c => `Atteindre une séquence de ${c.cible} cases`,
+  run(ctx, c) {
+    const N = c.taille * c.taille;
+    ctx.zone.innerHTML = `<div class="hud"><span>Longueur <b id="ml">0</b> / ${c.cible}</span><span>Erreurs restantes <b id="mv">${c.vies - 1}</b></span></div>
+      <div class="simon attente" id="sim" style="grid-template-columns:repeat(${c.taille},1fr)">${Array.from({ length: N }, (_, i) => `<button type="button" data-i="${i}" aria-label="Case ${i + 1}"></button>`).join("")}</div>
+      <p class="message" id="mm">Regardez bien.</p>`;
+    const sim = $("#sim"), cases = [...sim.children], msg = (t, cls = "") => { const m = $("#mm"); m.textContent = t; m.className = "message " + cls; };
+    let seq = [], attendu = [], pos = 0, ecoute = false, atteint = 0, vies = c.vies;
+    const ajouter = () => { let x; do x = R(0, N - 1); while (seq.length && x === seq[seq.length - 1] && Math.random() < 0.7); seq.push(x); };
+    const montrer = () => {
+      ecoute = false; sim.classList.add("attente"); msg(`Regardez : ${seq.length} cases.`);
+      $("#ml").textContent = seq.length;
+      seq.forEach((x, k) => {
+        ctx.after(() => cases[x].classList.add("flash"), 500 + k * c.flash * 1.4);
+        ctx.after(() => cases[x].classList.remove("flash"), 500 + k * c.flash * 1.4 + c.flash);
+      });
+      ctx.after(() => { ecoute = true; pos = 0; attendu = c.inverse ? [...seq].reverse() : seq; sim.classList.remove("attente"); msg(c.inverse ? "À vous, à l'envers." : "À vous."); }, 500 + seq.length * c.flash * 1.4);
+    };
+    const finir = () => { const score = Math.round(clamp(atteint / c.cible * 100)); ctx.fin({ score, reussi: atteint >= c.cible, mesure: `Séquence la plus longue réussie : ${atteint} case${atteint > 1 ? "s" : ""} sur ${c.cible}`, code: `${score}%,${atteint}/${c.cible}` }); };
+    sim.addEventListener("pointerdown", e => {
+      const b = e.target.closest("button"); if (!b || !ecoute || !ctx.vivant()) return;
+      e.preventDefault();
+      const x = +b.dataset.i;
+      if (x === attendu[pos]) {
+        b.classList.add("tap"); setTimeout(() => b.classList.remove("tap"), 160);
+        pos++;
+        if (pos === attendu.length) {
+          ecoute = false; atteint = seq.length; msg("Exact.", "bien");
+          if (atteint >= c.cible) return ctx.after(finir, 500);
+          ajouter(); ctx.after(montrer, 700);
+        }
+      } else {
+        ecoute = false; vies--; b.classList.add("err"); setTimeout(() => b.classList.remove("err"), 400);
+        $("#mv").textContent = Math.max(0, vies - 1);
+        if (vies <= 0) { msg("Erreur.", "mal"); return ctx.after(finir, 700); }
+        msg("Erreur. La même séquence va être rejouée.", "mal"); ctx.after(montrer, 1200);
+      }
+    });
+    for (let k = 0; k < Math.min(3, c.cible); k++) ajouter();
+    montrer();
+  }
+};
+
+/* --- Calcul éclair --- */
+function questionCalcul(d) {
+  const types = [0, 1]; if (d >= .15) types.push(2); if (d >= .3) types.push(3); if (d >= .4) types.push(4); if (d >= .55) types.push(5); if (d >= .7) types.push(6); if (d >= .8) types.push(7);
+  const M = 10 + Math.round(90 * d);
+  switch (pick(types)) {
+    case 0: { const a = R(2, M), b = R(2, M); return { q: `${a} + ${b}`, r: a + b }; }
+    case 1: { const a = R(8, M + 20), b = R(2, a - 1); return { q: `${a} − ${b}`, r: a - b }; }
+    case 2: { const a = R(2, 5 + Math.round(10 * d)), b = R(3, 9 + Math.round(10 * d)); return { q: `${a} × ${b}`, r: a * b }; }
+    case 3: { const b = R(2, 9 + Math.round(6 * d)), r = R(2, 9 + Math.round(10 * d)); return { q: `${b * r} ÷ ${b}`, r }; }
+    case 4: { const a = R(10, M), b = R(2, M), c = R(2, a + b - 1); return { q: `${a} + ${b} − ${c}`, r: a + b - c }; }
+    case 5: { const a = R(3, 12), b = R(3, 12), c = R(2, M); return { q: `${a} × ${b} + ${c}`, r: a * b + c }; }
+    case 6: { const n = R(11, 11 + Math.round(15 * d)); return { q: `${n}²`, r: n * n }; }
+    default: { const p = pick([10, 15, 20, 25, 50, 75]), x = 20 * R(2, 25); return { q: `${p} % de ${x}`, r: p * x / 100 }; }
+  }
+}
+const Calcul = {
+  id: "calcul", nom: "Calcul éclair", min: 1,
+  desc: "Enchaînez des calculs de tête, chacun contre la montre.",
+  cfg: L => { const d = dD(L); return { n: Math.round(lerp(8, 20, d)), sec: +lerp(12, 4.5, d).toFixed(1), erreursMax: L < 35 ? 2 : L < 70 ? 1 : 0, d }; },
+  consignes: c => [`${c.n} calculs à la suite`, `${virgule(c.sec)} s par calcul`, "Tapez le résultat puis Entrée", "Une réponse fausse ou trop lente compte comme une erreur"],
+  seuil: c => c.erreursMax ? `Au plus ${pl(c.erreursMax, "erreur")} sur ${c.n}` : `Aucune erreur sur ${c.n}`,
+  run(ctx, c) {
+    ctx.zone.innerHTML = `<div class="hud"><span>Calcul <b id="cn">1</b> / ${c.n}</span><span>Erreurs <b id="ce">0</b></span></div>
+      <div class="barre-t"><i id="cb"></i></div>
+      <div class="question" id="cq"></div>
+      <form class="rep" id="cf"><input id="ci" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Résultat" aria-label="Résultat"><button class="btn">Valider</button></form>
+      <p class="message" id="cm"></p>`;
+    let i = 0, ok = 0, err = 0, q = null, finQ = 0, bloque = false;
+    const montrer = () => {
+      q = questionCalcul(c.d); bloque = false;
+      $("#cn").textContent = i + 1; $("#cq").textContent = q.q; $("#cm").textContent = ""; $("#cm").className = "message";
+      const inp = $("#ci"); inp.value = ""; inp.focus();
+      finQ = maintenant() + c.sec * 1000;
+    };
+    const finir = () => { const score = Math.round(ok / c.n * 100); ctx.fin({ score, reussi: err <= c.erreursMax, mesure: `${ok} / ${c.n} calculs justes, ${pl(err, "erreur")}`, code: `${score}%,${ok}/${c.n}` }); };
+    const suivant = (juste, texte) => {
+      bloque = true;
+      if (juste) ok++; else err++;
+      $("#ce").textContent = err;
+      const m = $("#cm"); m.textContent = texte; m.className = "message " + (juste ? "bien" : "mal");
+      i++;
+      ctx.after(() => i >= c.n ? finir() : montrer(), juste ? 250 : 900);
+    };
+    ctx.every(() => {
+      if (bloque) return;
+      const rest = finQ - maintenant();
+      $("#cb").style.width = clamp(rest / (c.sec * 10)) + "%";
+      if (rest <= 0) suivant(false, `Temps écoulé. ${q.q} = ${q.r}`);
+    }, 60);
+    $("#cf").onsubmit = e => {
+      e.preventDefault(); if (bloque || !ctx.vivant()) return;
+      const v = $("#ci").value.replace(/\s/g, "").replace(",", ".");
+      if (!/^-?\d+(\.\d+)?$/.test(v)) return;
+      suivant(Number(v) === q.r, Number(v) === q.r ? "Juste." : `Faux. ${q.q} = ${q.r}`);
+    };
+    montrer();
+  }
+};
+
+/* --- Frappe --- */
+const MOTS_SIMPLES = "le la les un une des et ou mais donc car sur sous dans avec pour sans vers chez par temps main geste outil atelier forge fil bois pierre fer lime scie rabot marteau clou vis colle tour banc plan trait angle ligne point cercle courbe bord coin rouge vert noir blanc gris clair fin long court droit rond juste calme vite bien tout rien jamais souvent encore toujours ici loin plus moins nuit jour matin soir vent pluie feu eau terre ciel mer port route pont porte mur toit maison jardin arbre fleur fruit pain sel lait miel chat chien loup ours renard cheval oiseau poisson ville village marche place rue livre page mot phrase note carnet crayon papier compas niveau mesure patience adresse rythme calcul regard travail effort sens raison chose monde enfant ami voisin".split(" ");
+const MOTS_ACCENTS = "pièce près très équerre règle mémoire réflexe précision méthode maître frère idée été café forêt rivière lumière tête fenêtre élève métier création vérité léger étoile château clé âme déjà voilà où là à dès après côté goût sûr façon garçon leçon reçu hélas début écrit réglé gravé ébauche".split(" ");
+function texteFrappe(c) {
+  const pool = c.accents ? [...MOTS_SIMPLES, ...MOTS_ACCENTS, ...MOTS_ACCENTS] : MOTS_SIMPLES;
+  const out = []; let len = 0, maj = c.accents;
+  while (len < c.long) {
+    let w = pick(pool);
+    if (c.chiffres && Math.random() < 0.1) w = String(R(2, 2026));
+    if (maj) { w = w[0].toUpperCase() + w.slice(1); maj = false; }
+    if (c.ponct && out.length > 1 && len + w.length < c.long - 4 && Math.random() < 0.17) { if (Math.random() < 0.5) w += ","; else { w += "."; maj = true; } }
+    out.push(w); len += w.length + 1;
+  }
+  let t = out.join(" ");
+  if (c.ponct) t = t.replace(/[,.]$/, "") + ".";
+  return t;
+}
+const Frappe = {
+  id: "frappe", nom: "Frappe", min: 10,
+  desc: "Recopiez un texte au clavier, vite et sans faute.",
+  cfg: L => { const d = dDe(L, 10); return { long: Math.round(lerp(45, 170, d)), mpm: Math.round(lerp(18, 55, d)), prec: Math.round(lerp(92, 98, d)), accents: L >= 40, ponct: L >= 55, chiffres: L >= 75 }; },
+  consignes: c => [`Un texte d'environ ${c.long} caractères à recopier`, "Le chronomètre démarre à la première touche", c.chiffres ? "Majuscules, accents, ponctuation et nombres" : c.ponct ? "Majuscules, accents et ponctuation" : c.accents ? "Majuscules et accents" : "Minuscules, sans accent", "Le copier-coller est désactivé", "Terminez avec Entrée, ou en tapant le dernier caractère"],
+  seuil: c => `Au moins ${c.mpm} mots par minute et ${c.prec} % de précision`,
+  run(ctx, c) {
+    const texte = texteFrappe(c);
+    ctx.zone.innerHTML = `<div class="hud"><span>Vitesse <b id="fv">0</b> mots/min</span><span><b id="fl">0</b> / ${texte.length} caractères</span></div>
+      <div class="texte-cible" id="ft">${[...texte].map(ch => `<span>${esc(ch)}</span>`).join("")}</div>
+      <textarea class="saisie" id="fs" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Commencez à taper ici…" aria-label="Votre saisie"></textarea>`;
+    const fs = $("#fs"), spans = [...$("#ft").children];
+    let t0 = 0, fini = false;
+    const mpm = s => t0 ? Math.round((s.length / 5) / Math.max(1 / 60, (maintenant() - t0) / 60000)) : 0;
+    const finir = () => {
+      if (fini) return; fini = true;
+      const s = fs.value.replace(/\n/g, ""), v = mpm(s), acc = Math.max(0, 1 - levenshtein(s, texte) / texte.length), p = Math.round(acc * 1000) / 10;
+      const score = Math.round(clamp(v / c.mpm, 0, 1) * 60 + clamp((p - 85) / 15, 0, 1) * 40);
+      ctx.fin({ score, reussi: v >= c.mpm && p >= c.prec, mesure: `${v} mots par minute, ${virgule(p)} % de précision`, code: `${score}%,${v}mpm,${p}%` });
+    };
+    ["paste", "drop", "contextmenu"].forEach(t => fs.addEventListener(t, e => e.preventDefault()));
+    fs.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); if (fs.value.length >= texte.length * 0.8) finir(); } });
+    fs.addEventListener("input", () => {
+      if (!ctx.vivant()) return;
+      if (!t0) t0 = maintenant();
+      const s = fs.value.replace(/\n/g, "");
+      spans.forEach((sp, i) => { sp.className = i < s.length ? (s[i] === texte[i] ? "ok" : "ko") : i === s.length ? "cur" : ""; });
+      $("#fl").textContent = s.length; $("#fv").textContent = mpm(s);
+      if (s.length >= texte.length) finir();
+    });
+    ctx.every(() => { if (t0) $("#fv").textContent = mpm(fs.value); }, 500);
+    spans[0].className = "cur"; fs.focus();
+  }
+};
+
+/* --- Œil --- */
+const Oeil = {
+  id: "oeil", nom: "Œil", min: 15,
+  desc: "Repérez la seule case dont la nuance diffère des autres.",
+  cfg: L => { const d = dDe(L, 15); return { g: 3 + Math.round(lerp(0, 5, d)), delta: +lerp(16, 3.5, d).toFixed(1), manches: Math.round(lerp(8, 15, d)), sec: +lerp(10, 4, d).toFixed(1), erreursMax: L < 50 ? 2 : L < 80 ? 1 : 0 }; },
+  consignes: c => [`${c.manches} grilles de ${c.g} × ${c.g} cases`, "Une seule case a une nuance légèrement différente : touchez-la", `${virgule(c.sec)} s par grille`, `Écart de luminosité : ${virgule(c.delta)} %`],
+  seuil: c => c.erreursMax ? `Au plus ${pl(c.erreursMax, "erreur")} sur ${c.manches}` : `Aucune erreur sur ${c.manches}`,
+  run(ctx, c) {
+    const N = c.g * c.g;
+    ctx.zone.innerHTML = `<div class="hud"><span>Grille <b id="on">1</b> / ${c.manches}</span><span>Erreurs <b id="oe">0</b></span></div>
+      <div class="barre-t"><i id="ob"></i></div>
+      <div class="grille" id="og" style="grid-template-columns:repeat(${c.g},1fr)">${Array.from({ length: N }, (_, i) => `<button type="button" data-i="${i}" aria-label="Case ${i + 1}"></button>`).join("")}</div>`;
+    const cases = [...$("#og").children];
+    let i = 0, ok = 0, err = 0, cible = 0, finM = 0, bloque = true;
+    const manche = () => {
+      const h = R(0, 359), s = R(45, 75), l = R(40, 58), sg = l > 50 ? -1 : 1;
+      cible = R(0, N - 1);
+      cases.forEach((b, k) => { b.className = ""; b.style.background = `hsl(${h} ${s}% ${k === cible ? l + sg * c.delta : l}%)`; });
+      $("#on").textContent = i + 1; finM = maintenant() + c.sec * 1000; bloque = false;
+    };
+    const finir = () => { const score = Math.round(ok / c.manches * 100); ctx.fin({ score, reussi: err <= c.erreursMax, mesure: `${ok} / ${c.manches} cases repérées, ${pl(err, "erreur")}`, code: `${score}%,${ok}/${c.manches}` }); };
+    const suite = (juste, b) => {
+      bloque = true; if (juste) ok++; else err++;
+      $("#oe").textContent = err; cases[cible].classList.add("vu"); if (b && !juste) b.classList.add("err");
+      i++; ctx.after(() => i >= c.manches ? finir() : manche(), juste ? 300 : 900);
+    };
+    $("#og").addEventListener("pointerdown", e => { const b = e.target.closest("button"); if (!b || bloque || !ctx.vivant()) return; e.preventDefault(); suite(+b.dataset.i === cible, b); });
+    ctx.every(() => { if (bloque) return; const rest = finM - maintenant(); $("#ob").style.width = clamp(rest / (c.sec * 10)) + "%"; if (rest <= 0) suite(false, null); }, 60);
+    manche();
+  }
+};
+
+/* --- Rythme --- */
+const Rythme = {
+  id: "rythme", nom: "Rythme", min: 25,
+  desc: "Tenez le tempo d'un métronome, même quand il se tait.",
+  cfg: L => { const d = dDe(L, 25); return { bpm: Math.round(lerp(70, 130, d)), frappes: Math.round(lerp(8, 16, d)), seul: L >= 60, seuil: Math.round(lerp(110, 45, d)) }; },
+  consignes: c => [`Tempo : ${c.bpm} battements par minute`, "4 battements d'écoute, puis tapez sur chaque battement (pad ou Espace)", c.seul ? `Après l'écoute, le métronome se tait : tenez seul les ${c.frappes} battements` : `${c.frappes} battements à taper avec le métronome`, "Activez le son si possible", "Un battement manqué compte comme une demi-période d'écart"],
+  seuil: c => `Écart moyen d'au plus ${c.seuil} ms`,
+  run(ctx, c) {
+    ctx.zone.innerHTML = `<div class="hud"><span id="rs">Écoute</span><span>Frappes <b id="rk">0</b> / ${c.frappes}</span></div>
+      <div class="pad" id="rp" role="button" tabindex="-1"><div class="metro" id="rm">♩</div></div><p class="message" id="rmsg">Écoutez les 4 premiers battements.</p>`;
+    const P = 60000 / c.bpm, total = 4 + c.frappes, taps = [];
+    const ac = c.ac || null;
+    if (ac) ctx.audio(ac);
+    const T0 = maintenant() + 800, A0 = ac ? ac.currentTime + 0.8 : 0;
+    const bip = (k, fort) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(), t = A0 + k * P / 1000; o.frequency.value = fort ? 1320 : 880; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.1); };
+    for (let k = 0; k < total; k++) if (k < 4 || !c.seul) bip(k, k < 4);
+    const m = $("#rm");
+    let prochain = 0;
+    const finir = () => {
+      const devs = [];
+      let extras = 0; const meilleurs = Array(c.frappes).fill(Infinity);
+      taps.forEach(t => { const j = Math.round((t - T0) / P) - 4; if (j < 0 || j >= c.frappes) { extras++; return; } const dv = Math.abs(t - (T0 + (j + 4) * P)); if (meilleurs[j] !== Infinity) extras++; meilleurs[j] = Math.min(meilleurs[j], dv); });
+      meilleurs.forEach(v => devs.push(v === Infinity ? P / 2 : v));
+      const moy = Math.round(moyenne(devs)), manques = meilleurs.filter(v => v === Infinity).length;
+      const score = Math.round(clamp(scoreBas(moy, c.seuil) - 4 * extras));
+      ctx.fin({ score, reussi: moy <= c.seuil, mesure: `Écart moyen de ${moy} ms, ${pl(manques, "battement manqué", "battements manqués")}, ${pl(extras, "frappe en trop", "frappes en trop")}`, code: `${score}%,${moy}ms,m${manques},x${extras}` });
+    };
+    ctx.frame(() => {
+      const t = maintenant();
+      while (prochain < total && t >= T0 + prochain * P) {
+        const k = prochain++;
+        if (k < 4 || !c.seul) { m.classList.add("bat"); setTimeout(() => m.classList.remove("bat"), 90); }
+        if (k < 4) m.textContent = k + 1;
+        if (k === 3) { $("#rs").textContent = "À vous"; $("#rmsg").textContent = c.seul ? "Le métronome se tait : continuez seul." : "Tapez sur chaque battement."; }
+      }
+      if (t > T0 + (total - 0.4) * P) { finir(); return false; }
+    });
+    const tap = () => {
+      const t = maintenant(); if (t < T0 + 3.5 * P) return;
+      taps.push(t); $("#rk").textContent = Math.min(c.frappes, taps.length);
+      m.textContent = taps.length; m.classList.add("tape"); setTimeout(() => m.classList.remove("tape"), 120);
+    };
+    $("#rp").addEventListener("pointerdown", e => { e.preventDefault(); if (ctx.vivant()) tap(); });
+    ctx.key(e => { if (estFrappe(e)) { e.preventDefault(); tap(); } });
+  }
+};
+
+/* --- Horloge interne --- */
+const Chrono = {
+  id: "chrono", nom: "Horloge interne", min: 35,
+  desc: "Estimez une durée sans rien pour voir le temps passer.",
+  cfg: L => { const d = dDe(L, 35); return { essais: Math.round(lerp(3, 5, d)), max: Math.round(lerp(8, 20, d)), seuil: +lerp(15, 6, d).toFixed(1), distraction: L >= 70 }; },
+  consignes: c => [`${c.essais} durées à estimer, de 3 à ${c.max} secondes`, "Touchez le pad (ou Espace) pour démarrer, puis à nouveau quand la durée est écoulée", "Aucun chronomètre n'est affiché", c.distraction ? "Des chiffres défilent pour brouiller votre comptage" : null],
+  seuil: c => `Écart moyen d'au plus ${virgule(c.seuil)} %`,
+  run(ctx, c) {
+    ctx.zone.innerHTML = `<div class="hud"><span>Durée <b id="hn">1</b> / ${c.essais}</span><span>Écart moyen <b id="he">–</b></span></div><div class="pad" id="hp" role="button" tabindex="-1"></div>`;
+    const pad = $("#hp"), ecarts = [];
+    let i = 0, etat = "pret", cible = 0, t0 = 0, iv = null;
+    const prep = () => { cible = R(3, c.max) + (c.max > 10 && Math.random() < 0.4 ? 0.5 : 0); etat = "pret"; $("#hn").textContent = i + 1; pad.className = "pad"; pad.innerHTML = `${virgule(cible)} secondes<small>Touchez pour démarrer</small>`; };
+    const brouiller = () => { if (etat !== "cours") return; pad.innerHTML = `<span class="distrait">${R(1, 59)}</span><small>Touchez quand ${virgule(cible)} s sont écoulées</small>`; iv = ctx.after(brouiller, R(300, 1400)); };
+    const finir = () => { const moy = Math.round(moyenne(ecarts) * 10) / 10, score = scoreBas(moy, c.seuil); ctx.fin({ score, reussi: moy <= c.seuil, mesure: `Écart moyen de ${virgule(moy)} %`, code: `${score}%,${moy}%` }); };
+    const appui = () => {
+      if (etat === "pret") { etat = "cours"; t0 = maintenant(); pad.className = "pad go"; pad.innerHTML = `…<small>Touchez quand ${virgule(cible)} s sont écoulées</small>`; if (c.distraction) { pad.className = "pad"; brouiller(); } }
+      else if (etat === "cours") {
+        clearTimeout(iv); etat = "pause";
+        const t = (maintenant() - t0) / 1000, e = Math.abs(t - cible) / cible * 100;
+        ecarts.push(e); $("#he").textContent = virgule(moyenne(ecarts)) + " %";
+        pad.className = "pad"; pad.innerHTML = `${virgule(t, 2)} s<small>Cible ${virgule(cible)} s, écart de ${virgule(e)} %</small>`;
+        i++; ctx.after(() => i >= c.essais ? finir() : prep(), 1600);
+      }
+    };
+    pad.addEventListener("pointerdown", e => { e.preventDefault(); if (ctx.vivant()) appui(); });
+    ctx.key(e => { if (estFrappe(e)) { e.preventDefault(); appui(); } });
+    prep();
+  }
+};
+
+/* --- Tracé --- */
+const Trace = {
+  id: "trace", nom: "Tracé", min: 45,
+  desc: "Guidez votre trait dans un couloir sinueux sans jamais en sortir.",
+  cfg: L => { const d = dDe(L, 45); return { virages: Math.round(lerp(4, 10, d)), largeur: Math.round(lerp(44, 16, d)), sortiesMax: L < 70 ? 2 : L < 90 ? 1 : 0, limite: Math.round(lerp(45, 22, d)) }; },
+  consignes: c => ["Posez le doigt ou la souris sur le disque de départ, puis suivez le couloir jusqu'au drapeau", `Couloir de ${c.largeur} pixels de large, ${c.virages} virages`, "Sortir du couloir renvoie au départ et compte une sortie", "Lever le doigt est permis : reprenez là où vous vous êtes arrêté", `${c.limite} s au maximum, dès que le couloir apparaît`],
+  seuil: c => `Arriver en moins de ${c.limite} s avec ${c.sortiesMax ? `au plus ${pl(c.sortiesMax, "sortie")}` : "aucune sortie"}`,
+  run(ctx, c) {
+    ctx.zone.innerHTML = `<div class="hud"><span>Sorties <b id="ts">0</b> / ${c.sortiesMax} permises</span><span>Temps <b id="tt">${c.limite},0</b> s</span></div><canvas class="trace" id="tc"></canvas><p class="message" id="tm">Posez-vous sur le disque de départ.</p>`;
+    const cv = $("#tc"), W = Math.max(280, cv.clientWidth), H = W < 520 ? 340 : 380, dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
+    const g = cv.getContext("2d"); g.scale(dpr, dpr);
+    const css = getComputedStyle(document.body), col = v => css.getPropertyValue(v).trim();
+    const m = c.largeur / 2 + 16, ctrl = [];
+    for (let k = 0; k <= c.virages + 1; k++) ctrl.push([m + (W - 2 * m) * k / (c.virages + 1), k === 0 || k === c.virages + 1 ? H / 2 : R(m, H - m)]);
+    const pts = [];
+    for (let k = 0; k < ctrl.length - 1; k++) {
+      const p0 = ctrl[Math.max(0, k - 1)], p1 = ctrl[k], p2 = ctrl[k + 1], p3 = ctrl[Math.min(ctrl.length - 1, k + 2)];
+      const steps = Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 3);
+      for (let s = 0; s < steps; s++) { const t = s / steps, t2 = t * t, t3 = t2 * t; pts.push([0, 1].map(a => 0.5 * (2 * p1[a] + (-p0[a] + p2[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * t3))); }
+    }
+    pts.push(ctrl[ctrl.length - 1]);
+    const half = c.largeur / 2, fenetre = 30, fin = pts.length - 1;
+    let etat = "depart", progres = 0, sorties = 0, t0 = maintenant(), curseur = null, flash = 0, termine = false;
+    const dist = (x, y, a, b) => { let best = Infinity, idx = -1; for (let j = Math.max(0, a); j <= Math.min(fin, b); j++) { const d = Math.hypot(pts[j][0] - x, pts[j][1] - y); if (d < best) { best = d; idx = j; } } return [best, idx]; };
+    const msg = (t, cls = "") => { const e = $("#tm"); e.textContent = t; e.className = "message " + cls; };
+    const finir = arrive => {
+      if (termine) return; termine = true;
+      const t = (maintenant() - t0) / 1000;
+      const score = arrive ? Math.round(clamp(100 - 20 * sorties - 40 * Math.max(0, t / c.limite - 0.5))) : Math.round(progres / fin * 50);
+      ctx.fin({ score, reussi: arrive && sorties <= c.sortiesMax && t <= c.limite, mesure: arrive ? `Arrivée en ${virgule(t, 1)} s avec ${pl(sorties, "sortie")}` : `Temps écoulé à ${Math.round(progres / fin * 100)} % du parcours, ${pl(sorties, "sortie")}`, code: `${score}%,${arrive ? virgule(t, 1).replace(",", ".") + "s" : "inacheve"},s${sorties}` });
+    };
+    const bouger = (x, y, appuye) => {
+      if (etat === "depart" && appuye && Math.hypot(x - pts[0][0], y - pts[0][1]) <= Math.max(half + 6, 18)) { etat = "trace"; msg("Suivez le couloir."); }
+      if (etat !== "trace") return;
+      const [d] = dist(x, y, 0, fin);
+      if (d > half) {
+        sorties++; $("#ts").textContent = sorties; flash = maintenant(); etat = "depart"; progres = 0;
+        msg("Sortie ! Retour au départ.", "mal"); return;
+      }
+      const [d2, j] = dist(x, y, progres, progres + fenetre);
+      if (d2 <= half && j > progres) progres = j;
+      if (progres >= fin - 2) { progres = fin; etat = "fini"; msg("Arrivé !", "bien"); ctx.after(() => finir(true), 400); }
+    };
+    const pos = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * W / b.width, (e.clientY - b.top) * H / b.height]; };
+    cv.addEventListener("pointerdown", e => {
+      if (!ctx.vivant() || etat === "fini") return;
+      e.preventDefault(); const [x, y] = pos(e); curseur = [x, y];
+      const p = pts[progres];
+      if (Math.hypot(x - p[0], y - p[1]) <= Math.max(half + 6, 18)) {
+        try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+        etat = "trace"; msg("Suivez le couloir.");
+      } else msg(progres ? "Reprenez sur le point lumineux." : "Commencez sur le disque de départ.");
+    });
+    cv.addEventListener("pointermove", e => {
+      if (!ctx.vivant()) return;
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      for (const ev of (evs.length ? evs : [e])) { const [x, y] = pos(ev); curseur = [x, y]; bouger(x, y, e.buttons > 0 || e.pointerType === "touch"); }
+    });
+    const lever = () => { if (etat === "trace") { etat = "pause"; msg("Pause. Reprenez sur le point lumineux."); } };
+    cv.addEventListener("pointerup", lever); cv.addEventListener("pointercancel", lever);
+    const chemin = (a, b) => { g.beginPath(); g.moveTo(pts[a][0], pts[a][1]); for (let j = a + 1; j <= b; j++) g.lineTo(pts[j][0], pts[j][1]); };
+    ctx.frame(() => {
+      if (!termine) {
+        const rest = c.limite - (maintenant() - t0) / 1000;
+        $("#tt").textContent = virgule(Math.max(0, rest), 1).replace(/^(\d+)$/, "$1,0");
+        if (rest <= 0 && etat !== "fini") { finir(false); return false; }
+      }
+      g.clearRect(0, 0, W, H);
+      g.lineCap = g.lineJoin = "round";
+      chemin(0, fin); g.strokeStyle = maintenant() - flash < 300 ? col("--rouge") : col("--nuit3"); g.lineWidth = c.largeur; g.stroke();
+      chemin(0, fin); g.strokeStyle = col("--trait"); g.lineWidth = 1.5; g.setLineDash([4, 6]); g.stroke(); g.setLineDash([]);
+      if (progres > 0) { chemin(0, progres); g.strokeStyle = col("--acc"); g.lineWidth = Math.max(4, c.largeur * 0.35); g.stroke(); }
+      const [ax, ay] = pts[fin]; g.fillStyle = col("--vert"); g.beginPath(); g.arc(ax, ay, Math.max(8, half * 0.7), 0, 7); g.fill();
+      const [px, py] = pts[progres], pulse = 1 + 0.15 * Math.sin(maintenant() / 180);
+      g.fillStyle = col("--acc"); g.globalAlpha = etat === "trace" ? 1 : 0.85; g.beginPath(); g.arc(px, py, Math.max(7, half * 0.6) * (etat === "trace" ? 1 : pulse), 0, 7); g.fill(); g.globalAlpha = 1;
+      if (curseur) { g.strokeStyle = col("--texte"); g.lineWidth = 1.5; g.beginPath(); g.arc(curseur[0], curseur[1], 5, 0, 7); g.stroke(); }
+    });
+  }
+};
+
+const ATELIERS = [Precision, Reflexes, Memoire, Calcul, Frappe, Oeil, Rythme, Chrono, Trace];
+const ATELIER = Object.fromEntries(ATELIERS.map(a => [a.id, a]));
+
+/* Le circuit d'un niveau est fixe : il est tiré d'une graine propre au niveau. */
+function circuit(L) {
+  const rnd = mulberry(L * 7919 + 17);
+  const dispo = ATELIERS.filter(a => a.min <= L);
+  const n = Math.min(dispo.length, 3 + Math.floor(L / 17));
+  const nouveaux = dispo.filter(a => a.min > 1 && L - a.min < 5);
+  const reste = shuffle(dispo.filter(a => !nouveaux.includes(a)), rnd);
+  return shuffle([...nouveaux, ...reste].slice(0, n), rnd);
+}
+
+/* ===================== CIRCUIT ===================== */
+const Circuit = {
+  start(root, L) {
+    const liste = circuit(L);
+    const st = S.mod = { i: 0, res: [], details: () => `ateliers=${st.res.filter(r => r.reussi).length}/${liste.length};` + liste.map((a, k) => `${a.id}=${st.res[k] ? (st.res[k].reussi ? "ok" : "ko") + "," + st.res[k].code : "na"}`).join(";") };
+    const scoreGlobal = () => Math.round(st.res.reduce((s, r) => s + r.score, 0) / liste.length);
+    root.innerHTML = `<div class="scene">
+      <div class="eh"><span><b id="ct"></b></span><button class="btn second petit" id="stop">Arrêter l'épreuve</button></div>
+      <div class="etapes" id="etp">${liste.map(() => "<i></i>").join("")}</div>
+      <div id="zone"></div></div>`;
+    const zone = $("#zone");
+    const majEtapes = () => [...$("#etp").children].forEach((el, k) => el.className = k < st.res.length ? (st.res[k].reussi ? "ok" : "ko") : k === st.i ? "cours" : "");
+    const conclure = () => {
+      const ok = st.res.every(r => r.reussi), rates = liste.filter((a, k) => !st.res[k].reussi).map(a => a.id);
+      terminer({ statut: ok ? "reussi" : "echoue", score: scoreGlobal(), details: st.details(), raison: ok ? "" : "ateliers_non_valides:" + rates.join(","), ateliers: st.res });
+    };
+    Circuit.expire = () => terminer({ statut: "temps_ecoule", score: scoreGlobal(), details: st.details(), ateliers: st.res });
+    $("#stop").onclick = () => { arreterAtelier(); terminer({ statut: "echoue", score: scoreGlobal(), details: st.details(), raison: "abandon_volontaire", ateliers: st.res }); };
+    const consigne = () => {
+      const a = liste[st.i], c = a.cfg(L);
+      $("#ct").textContent = `Atelier ${st.i + 1} sur ${liste.length} · ${a.nom}`; majEtapes();
+      zone.innerHTML = `<div class="consigne">${icone(a.id)}<h2>${a.nom}</h2><p>${a.desc}</p>
+        <ul class="puces">${a.consignes(c).filter(Boolean).map(x => `<li>${x}</li>`).join("")}</ul>
+        <div class="seuil">Pour valider : ${a.seuil(c)}</div>
+        <div class="actions"><button class="btn" id="go">Commencer l'atelier</button></div></div>`;
+      window.scrollTo(0, 0);
+      $("#go").onclick = () => {
+        /* le son doit être débloqué par un geste de l'utilisateur */
+        if (a.id === "rythme") try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); c.ac.resume(); } catch (e) { c.ac = null; }
+        let k = 3; zone.innerHTML = `<div class="decompte" id="dc">3</div>`;
+        const iv = setInterval(() => {
+          if (!S || S.fini) return clearInterval(iv);
+          if (--k > 0) { $("#dc").textContent = k; return; }
+          clearInterval(iv); zone.innerHTML = "";
+          demarrerAtelier(a, c, zone, res => bilan(a, { id: a.id, nom: a.nom, ...res }));
+        }, 650);
+        S.ivs.push(iv);
+      };
+      $("#go").focus();
+    };
+    const bilan = (a, res) => {
+      st.res.push(res); st.i++; majEtapes();
+      const dernier = st.i >= liste.length;
+      zone.innerHTML = `<div class="bilan"><span class="etiq ${res.reussi ? "" : "ko"}">${res.reussi ? "Atelier validé" : "Atelier non validé"}</span>
+        <h2>${a.nom}</h2><p class="mesure">${res.mesure}</p><div class="pts">${res.score}<small> / 100</small></div>
+        <div class="actions"><button class="btn" id="suite">${dernier ? "Voir le résultat" : `Atelier suivant : ${liste[st.i].nom}`}</button></div></div>`;
+      /* bref verrou : une frappe d'Espace en trop ne doit pas sauter le bilan */
+      const bt = $("#suite"); bt.disabled = true;
+      bt.onclick = () => dernier ? conclure() : consigne();
+      setTimeout(() => { bt.disabled = false; bt.focus(); }, 900);
+    };
+    consigne();
+  },
+  expire() {}
+};
+
+/* ===================== VUES ===================== */
+const etatTexte = () => { const p = prog(); return p ? `${pl(p, "niveau réussi", "niveaux réussis")} sur ${NB}` : "Aucun niveau réussi"; };
+function positions() {
+  return Array.from({ length: NB }, (_, i) => { const row = Math.floor(i / 10), col = row % 2 ? 9 - i % 10 : i % 10; return [col * 10 + 5, row * 10 + 5]; });
+}
+function vueAccueil() {
+  const p = prog(), pos = positions();
+  const ligne = pts => pts.map(([x, y]) => `${x},${y}`).join(" ");
+  const noeuds = pos.map(([x, y], i) => {
+    const n = i + 1, cls = [n % 10 === 0 ? "palier" : "", n <= p ? "ok" : n === p + 1 ? "ouvert" : CONFIG.TOUT_DEBLOQUE ? "libre" : ""].join(" ");
+    const style = `left:${x}%;top:${y}%`;
+    return debloque(n) ? `<a class="noeud ${cls}" style="${style}" data-nav="/${n}" href="${lien(`/${n}`)}" aria-label="Niveau ${n}">${n}</a>` : `<span class="noeud ${cls}" style="${style}" aria-label="Niveau ${n}, verrouillé">${n}</span>`;
+  }).join("");
+  const atteint = Math.max(1, p + 1);
+  app.innerHTML = `
+    <div class="tete">
+      <div><h1>Cent niveaux<br>de technique.</h1>
+      <p class="chapo">Chaque niveau est un circuit d'ateliers : précision, réflexes, mémoire, calcul, et d'autres qui s'ajoutent en route. Il faut valider tous les ateliers du circuit pour ouvrir le niveau suivant. Une tentative dure une heure au plus, puis il faut attendre ${CONFIG.COOLDOWN_MIN / 60} heures, réussie ou non. Quitter la page pendant une épreuve l'annule aussitôt.</p></div>
+      <div class="etat"><div class="jauge"><i style="width:${p / NB * 100}%"></i></div><span>${etatTexte()}</span></div>
+    </div>
+    <p class="aide">Résultats transmis au nom de <b style="color:var(--texte)">${esc(email())}</b> · <a href="#" id="chg">changer d'adresse</a></p>
+    <div class="bandeau hidden" id="cdb"></div>
+    <div class="actions">${p < NB ? `<a class="btn" data-nav="/${p + 1}" href="${lien(`/${p + 1}`)}">Aller au niveau ${p + 1}</a>` : ""}</div>
+    <div class="carte">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <polyline points="${ligne(pos)}" fill="none" stroke="var(--trait)" stroke-width=".5" stroke-linejoin="round"/>
+        ${p ? `<polyline points="${ligne(pos.slice(0, Math.min(NB, p + 1)))}" fill="none" stroke="var(--acc)" stroke-width=".7" stroke-linejoin="round"/>` : ""}
+      </svg>
+      ${noeuds}
+    </div>
+    <div class="legende"><span><i class="ok"></i>Réussi</span><span><i class="ouvert"></i>Prochain niveau</span><span><i></i>Verrouillé</span></div>
+    <section class="section">
+      <h2>Les neuf ateliers</h2>
+      <p>Les circuits comptent de 3 à 8 ateliers. Chaque nouvel atelier entre dans les circuits à partir de son niveau d'ouverture, et tous se durcissent à chaque niveau.</p>
+      <div class="ateliers">${ATELIERS.map(a => `<div class="atelier ${a.min <= atteint ? "ouvert" : ""}">${icone(a.id)}<h3>${a.nom}</h3><p>${a.desc}</p><span class="des">${a.min === 1 ? "Dès le niveau 1" : `À partir du niveau ${a.min}`}</span></div>`).join("")}</div>
+    </section>`;
+  $("#chg").onclick = e => { e.preventDefault(); store.del(K_EMAIL); rendre(); };
+  const maj = () => { const r = cooldown(), b = $("#cdb"); if (!b) return; b.classList.toggle("hidden", !r); b.textContent = r ? `Prochaine tentative possible dans ${hm(r)}.` : ""; };
+  maj(); ivVue = setInterval(maj, 15000);
+}
+function vueIntro(n) {
+  const niv = Math.ceil(n / 10);
+  const diff = `<div class="diff" aria-label="Difficulté ${niv} sur 10">${Array.from({ length: 10 }, (_, i) => `<i class="${i < niv ? "on" : ""}"></i>`).join("")}</div>`;
+  const tete = `<div class="nv-tete"><div class="gros">${n}</div><div><h1>Épreuve des techniques</h1><p>Niveau ${n} sur ${NB}</p>${diff}</div></div>`;
+  if (!debloque(n)) {
+    app.innerHTML = `${tete}<div class="fiche"><div class="bloc"><h2>Niveau verrouillé</h2><p style="color:var(--doux)">Réussissez le niveau ${prog() + 1} pour avancer. Les niveaux s'ouvrent un par un.</p>
+      <div class="actions"><a class="btn" data-nav="/${prog() + 1}" href="${lien(`/${prog() + 1}`)}">Aller au niveau ${prog() + 1}</a><a class="btn second" data-nav="/" href="${lien("/")}">Voir les niveaux</a></div></div></div>`;
+    return;
+  }
+  const liste = circuit(n);
+  app.innerHTML = `${tete}
+    <div class="fiche">
+      <div class="bloc"><h2>Le circuit : ${pl(liste.length, "atelier")}</h2><ol class="parcours">${liste.map(a => `<li><b>${a.nom}</b><span>${a.seuil(a.cfg(n))}</span></li>`).join("")}</ol></div>
+      <div class="bloc danger"><h2>Avant de commencer</h2><ul class="puces">
+        <li>Tous les ateliers doivent être validés pour réussir le niveau.</li>
+        <li>Changer d'onglet ou de fenêtre, cliquer hors de l'épreuve, réduire ou recharger la page l'annule aussitôt.</li>
+        <li>Durée maximale : ${CONFIG.DUREE_MAX_MIN} minutes pour tout le circuit.</li>
+        <li>Pause de ${CONFIG.COOLDOWN_MIN / 60} heures après la tentative, réussie ou non.</li>
+        ${liste.some(a => a.id === "rythme") ? "<li>L'atelier Rythme utilise le son : montez le volume.</li>" : ""}
+      </ul></div>
+    </div>
+    <div class="actions"><button class="btn" id="go">Commencer le niveau ${n}</button><a class="btn second" data-nav="/" href="${lien("/")}">Voir les niveaux</a></div>
+    <p class="aide" id="cdi"></p>`;
+  $("#go").onclick = () => lancer(n);
+  const maj = () => { const r = cooldown(), b = $("#go"); if (!b) return; b.disabled = r > 0; $("#cdi").textContent = r ? `Prochaine tentative possible dans ${hm(r)}.` : ""; };
+  maj(); ivVue = setInterval(maj, 15000);
+}
+const LIBELLES = { reussi: "Niveau réussi", echoue: "Niveau échoué", invalide: "Tentative annulée", temps_ecoule: "Temps écoulé" };
+function vueResultat(r) {
+  clearInterval(ivVue);
+  const liste = circuit(r.n);
+  const exp = {
+    invalide: "La page a été quittée pendant l'épreuve.",
+    temps_ecoule: "L'heure est passée.",
+    echoue: r.raison === "abandon_volontaire" ? "Vous avez arrêté l'épreuve." : "Au moins un atelier n'a pas été validé.",
+    reussi: r.n < NB ? `Le niveau ${r.n + 1} est maintenant ouvert.` : "Vous avez terminé les cent niveaux."
+  }[r.statut] || "";
+  const suiv = r.statut === "reussi" && r.n < NB;
+  app.innerHTML = `
+    <div class="resultat">
+      <h1>${LIBELLES[r.statut] || r.statut}</h1>
+      <p class="chapo" style="margin-inline:auto">Épreuve des techniques, niveau ${r.n}. ${exp}</p>
+      <div class="score" ${r.statut === "reussi" ? "" : 'style="color:var(--rouge)"'}>${r.score}<small> / 100</small></div>
+      <ul class="recap">${liste.map((a, k) => { const x = r.ateliers[k]; return `<li><i class="st ${x ? (x.reussi ? "" : "ko") : "na"}"></i><div><b>${a.nom}</b><br><span>${x ? x.mesure : "Non joué"}</span></div><b class="p">${x ? x.score : "–"}</b></li>`; }).join("")}</ul>
+      <p class="aide">Résultat transmis. Prochaine tentative dans ${hm(cooldown())}.</p>
+      <div class="actions">
+        ${suiv ? `<a class="btn" data-nav="/${r.n + 1}" href="${lien(`/${r.n + 1}`)}">Voir le niveau ${r.n + 1}</a>` : ""}
+        <a class="btn ${suiv ? "second" : ""}" data-nav="/" href="${lien("/")}">Voir les niveaux</a>
+      </div>
+      <details><summary>Données transmises</summary><code>${esc(derniereUrl)}</code></details>
+    </div>`;
+}
+function vueEmail() {
+  const pre = (new URLSearchParams(location.search).get("email") || "").trim();
+  app.innerHTML = `
+    <div class="identite">
+      <h1>Avant de commencer.</h1>
+      <p class="chapo">Indiquez votre adresse e-mail. Elle accompagne chacun de vos résultats pour qu'ils vous soient attribués. Elle n'est demandée qu'une fois sur cet appareil.</p>
+      <form class="rep gauche" id="mf" novalidate>
+        <input id="mi" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="prenom.nom@exemple.fr" aria-label="Adresse e-mail" value="${esc(pre)}">
+        <button class="btn">Continuer</button>
+      </form>
+      <p class="message gauche" id="mm" aria-live="polite"></p>
+    </div>`;
+  $("#mi").focus();
+  $("#mi").oninput = () => { $("#mm").textContent = ""; };
+  $("#mf").onsubmit = e => {
+    e.preventDefault();
+    const v = $("#mi").value.trim().toLowerCase();
+    if (!EMAIL_OK.test(v)) { const m = $("#mm"); m.textContent = "Cette adresse ne semble pas valide."; m.className = "message gauche mal"; return; }
+    store.set(K_EMAIL, v); rendre();
+  };
+}
+function vueInconnu() {
+  app.innerHTML = `<h1>Page introuvable</h1><p class="chapo">Les adresses valides sont / pour la carte des niveaux, et /1 à /${NB} pour un niveau.</p>
+    <div class="actions"><a class="btn" data-nav="/" href="${lien("/")}">Voir les niveaux</a></div>`;
+}
+document.querySelector(".marque").setAttribute("href", lien("/"));
+rendre();
+</script>
+</body>
+</html>
