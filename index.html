@@ -260,9 +260,10 @@ const hm = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? `${Math.flo
 const pl = (n, s, p = s + "s") => `${n} ${n > 1 ? p : s}`;
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const maintenant = () => performance.now();
-/* score de 0 à 100 où le seuil de validation vaut 70 */
-const scoreBas = (v, seuil) => Math.round(clamp(100 - 30 * v / seuil));
-const scoreHaut = (v, seuil) => Math.round(clamp(70 * v / seuil));
+/* note de 0 à 100 : atteindre tout juste l'objectif donne NOTE_MIN (90), faire mieux rapproche de 100 */
+const NOTE_MIN = 90;
+const scoreBas = (v, seuil) => Math.round(clamp(100 - (100 - NOTE_MIN) * v / seuil));
+const scoreHaut = (v, seuil) => Math.round(clamp(NOTE_MIN * v / seuil));
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const mem = {};
 const store = {
@@ -362,6 +363,7 @@ function envoyer(r) {
 /* ===================== SESSION ===================== */
 let S = null;
 function lancer(n) {
+  clearInterval(ivVue);
   if (!email() || !debloque(n) || cooldown() > 0) return rendre();
   const now = Date.now();
   S = { id: uid(), n, email: email(), debut: now, fini: false, armeA: now + 600, limite: now + CONFIG.DUREE_MAX_MIN * 60000, ivs: [] };
@@ -392,7 +394,7 @@ function terminer({ statut, score = 0, details = "", raison = "", ateliers = [] 
 function invalider(raison, force) {
   if (S && !S.fini && (force || Date.now() > S.armeA)) {
     const c = S.mod;
-    terminer({ statut: "invalide", score: 0, raison, details: "page_quittee" + (c ? ";" + c.details() : ""), ateliers: c ? c.res : [] });
+    terminer({ statut: "invalide", score: 0, raison, details: "page_quittee" + (c ? ";" + c.details() : ""), ateliers: c ? c.recap() : [] });
   }
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) invalider("onglet_ou_fenetre_change"); });
@@ -450,40 +452,42 @@ const dDe = (L, min) => (L - min) / (100 - min);
 const Precision = {
   id: "precision", nom: "Précision", min: 1,
   desc: "Touchez des cibles qui rétrécissent, s'échappent et ne restent qu'un instant.",
-  cfg: L => { const d = dD(L); return { n: Math.round(lerp(10, 30, d)), r: Math.round(lerp(30, 11, d)), vie: Math.round(lerp(2200, 750, d)), vitesse: L >= 30 ? Math.round(lerp(0, 170, (L - 30) / 70)) : 0, seuil: Math.round(lerp(70, 90, d)) }; },
-  consignes: c => [`${c.n} cibles apparaissent l'une après l'autre`, `Chaque cible reste ${virgule(c.vie / 1000)} s : l'anneau se referme quand elle va disparaître`, c.vitesse ? "Les cibles se déplacent" : "Les cibles sont immobiles", "Toucher à côté retire une demi-cible"],
-  seuil: c => `Score d'au moins ${c.seuil} %`,
+  cfg: L => { const d = dD(L); return { n: Math.round(lerp(10, 30, d)), r: Math.round(lerp(30, 11, d)), vie: Math.round(lerp(2200, 750, d)), vitesse: L >= 30 ? Math.round(lerp(0, 170, (L - 30) / 70)) : 0 }; },
+  consignes: c => [`${c.n} cibles apparaissent l'une après l'autre`, `Chaque cible reste ${virgule(c.vie / 1000)} s : l'anneau se referme quand elle va disparaître`, c.vitesse ? "Les cibles se déplacent" : "Les cibles sont immobiles", "Une cible manquée ou un tir à côté arrête l'atelier"],
+  seuil: c => `Toucher les ${c.n} cibles sans aucune erreur`,
   run(ctx, c) {
-    ctx.zone.innerHTML = `<div class="hud"><span>Cible <b id="pn">0</b> / ${c.n}</span><span>Touchées <b id="ph">0</b> · À côté <b id="pf">0</b></span></div><div class="arene" id="ar"></div>`;
+    ctx.zone.innerHTML = `<div class="hud"><span>Cible <b id="pn">0</b> / ${c.n}</span><span>Touchées <b id="ph">0</b></span></div><div class="arene" id="ar"></div>`;
     const ar = $("#ar"), W = () => ar.clientWidth, H = () => ar.clientHeight;
-    let i = 0, hits = 0, fautes = 0, cur = null, last = 0;
-    const majHud = () => { $("#pn").textContent = i; $("#ph").textContent = hits; $("#pf").textContent = fautes; };
+    let i = 0, hits = 0, cur = null, last = 0, fini = false;
+    const majHud = () => { $("#pn").textContent = i; $("#ph").textContent = hits; };
     const impact = (x, y, rate) => { ar.insertAdjacentHTML("beforeend", `<div class="impact ${rate ? "rate" : ""}" style="left:${x}px;top:${y}px"></div>`); const el = ar.lastElementChild; setTimeout(() => el.remove(), 450); };
-    const finir = () => {
-      const score = Math.round(clamp((hits - fautes / 2) / c.n * 100));
-      ctx.fin({ score, reussi: score >= c.seuil, mesure: `${hits} / ${c.n} cibles touchées, ${pl(fautes, "tir")} à côté`, code: `${score}%,${hits}/${c.n},f${fautes}` });
+    const rate = txt => {
+      if (fini) return; fini = true;
+      const score = Math.round(hits / c.n * 100);
+      ctx.after(() => ctx.fin({ score, reussi: false, mesure: `${txt} après ${hits} / ${c.n} cibles`, code: `${score}%,${hits}/${c.n}` }), 450);
     };
     const suivante = () => {
-      if (i >= c.n) return finir();
+      if (fini) return;
+      if (i >= c.n) { fini = true; return ctx.fin({ score: 100, reussi: true, mesure: `${c.n} / ${c.n} cibles touchées sans erreur`, code: `100%,${c.n}/${c.n}` }); }
       i++; majHud();
       const r = c.r, x = R(r + 8, Math.max(r + 9, W() - r - 8)), y = R(r + 8, Math.max(r + 9, H() - r - 8)), a = Math.random() * Math.PI * 2;
       const el = document.createElement("div");
       el.className = "cible"; el.style.cssText = `width:${2 * r}px;height:${2 * r}px;left:${x}px;top:${y}px;--vie:${c.vie}ms`;
       ar.appendChild(el);
       const me = cur = { el, x, y, vx: Math.cos(a) * c.vitesse, vy: Math.sin(a) * c.vitesse };
-      ctx.after(() => { if (cur === me) { el.remove(); cur = null; impact(me.x, me.y, true); ctx.after(suivante, 260); } }, c.vie);
+      ctx.after(() => { if (cur === me && !fini) { el.remove(); cur = null; impact(me.x, me.y, true); rate("Cible manquée"); } }, c.vie);
     };
     ar.addEventListener("pointerdown", e => {
-      if (!ctx.vivant()) return;
+      if (!ctx.vivant() || fini) return;
       e.preventDefault();
       const b = ar.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
       if (cur && Math.hypot(px - cur.x, py - cur.y) <= c.r + 3) {
         hits++; cur.el.remove(); impact(cur.x, cur.y, false); cur = null; majHud(); ctx.after(suivante, 220);
-      } else { fautes++; majHud(); ar.classList.remove("faute"); void ar.offsetWidth; ar.classList.add("faute"); impact(px, py, true); }
+      } else { ar.classList.remove("faute"); void ar.offsetWidth; ar.classList.add("faute"); impact(px, py, true); rate("Tir à côté"); }
     });
     ctx.frame(t => {
       const dt = last ? Math.min(0.05, (t - last) / 1000) : 0; last = t;
-      if (cur && c.vitesse) {
+      if (cur && c.vitesse && !fini) {
         cur.x += cur.vx * dt; cur.y += cur.vy * dt;
         if (cur.x < c.r || cur.x > W() - c.r) { cur.vx *= -1; cur.x = clamp(cur.x, c.r, W() - c.r); }
         if (cur.y < c.r || cur.y > H() - c.r) { cur.vy *= -1; cur.y = clamp(cur.y, c.r, H() - c.r); }
@@ -498,15 +502,21 @@ const Precision = {
 const Reflexes = {
   id: "reflexes", nom: "Réflexes", min: 1,
   desc: "Réagissez dès que le signal passe au vert, et retenez-vous quand il est rouge.",
-  cfg: L => { const d = dD(L); return { essais: Math.round(lerp(5, 10, d)), seuil: Math.round(lerp(480, 290, d)), nogo: L >= 40 ? 0.3 : 0, fautesMax: L < 50 ? 1 : 0 }; },
-  consignes: c => [`${pl(c.essais, "signal vert", "signaux verts")} à attraper`, "Touchez le pad ou appuyez sur Espace dès qu'il devient vert", "Toucher avant le vert est un faux départ", c.nogo ? "Parfois le pad devient rouge : ne touchez surtout pas" : null, `Au plus ${pl(c.fautesMax, "faute")} permise${c.fautesMax > 1 ? "s" : ""}`],
-  seuil: c => `Temps de réaction moyen d'au plus ${c.seuil} ms`,
+  /* 480 ms au niveau 1, 150 ms au niveau 100 : la courbe se resserre surtout dans les derniers niveaux */
+  cfg: L => { const d = dD(L); return { essais: Math.round(lerp(5, 10, d)), seuil: Math.round(480 - 330 * Math.pow(d, 1.4)), nogo: L >= 30 ? Math.min(0.35, 0.15 + (L - 30) / 350) : 0 }; },
+  consignes: c => [`${pl(c.essais, "signal vert", "signaux verts")} à attraper`, "Touchez le pad ou appuyez sur Espace dès qu'il devient vert", "Toucher avant le vert, ou en moins de 80 ms (anticipation), est un faux départ", c.nogo ? "Parfois le pad devient rouge : ne touchez surtout pas" : null, "Une réaction de plus d'une seconde est une erreur", "La moindre erreur arrête l'atelier"],
+  seuil: c => `Temps de réaction moyen d'au plus ${c.seuil} ms, sans erreur`,
   run(ctx, c) {
-    ctx.zone.innerHTML = `<div class="hud"><span>Signal <b id="rn">0</b> / ${c.essais}</span><span>Fautes <b id="rf">0</b></span></div><div class="pad" id="pad" role="button" tabindex="-1">Préparez-vous<small>Le pad va passer au vert</small></div>`;
+    ctx.zone.innerHTML = `<div class="hud"><span>Signal <b id="rn">0</b> / ${c.essais}</span><span>Moyenne <b id="rmoy">–</b> · objectif ${c.seuil} ms</span></div><div class="pad" id="pad" role="button" tabindex="-1">Préparez-vous<small>Le pad va passer au vert</small></div>`;
     const pad = $("#pad"), temps = [];
-    let etat = "pause", t0 = 0, fautes = 0, tm = null, nogoSuite = 0;
+    let etat = "pause", t0 = 0, tm = null, nogoSuite = 0;
     const aff = (cls, txt, sous = "") => { pad.className = "pad " + cls; pad.innerHTML = txt + (sous ? `<small>${sous}</small>` : ""); };
-    const maj = () => { $("#rn").textContent = temps.length; $("#rf").textContent = fautes; };
+    const maj = () => { $("#rn").textContent = temps.length; $("#rmoy").textContent = temps.length ? Math.round(moyenne(temps)) + " ms" : "–"; };
+    const score = () => temps.length ? Math.round(scoreBas(moyenne(temps), c.seuil) * temps.length / c.essais) : 0;
+    const rate = (titre, sous) => {
+      clearTimeout(tm); etat = "fini"; aff("faute", titre, sous);
+      ctx.after(() => ctx.fin({ score: score(), reussi: false, mesure: `${titre} au signal ${temps.length + 1} sur ${c.essais}`, code: `${score()}%,${temps.length}/${c.essais}` }), 900);
+    };
     const suivant = () => temps.length >= c.essais ? finir() : essai();
     const essai = () => {
       etat = "attente"; aff("", "Attendez…", "Pas encore");
@@ -516,18 +526,24 @@ const Reflexes = {
           tm = ctx.after(() => { etat = "pause"; aff("", "Bien retenu", ""); ctx.after(suivant, 500); }, 1000);
         } else {
           nogoSuite = 0; etat = "go"; t0 = maintenant(); aff("go", "Maintenant !");
-          tm = ctx.after(() => { if (etat !== "go") return; etat = "pause"; temps.push(1500); maj(); aff("", "Trop lent", "1 500 ms comptées"); ctx.after(suivant, 800); }, 1500);
+          tm = ctx.after(() => { if (etat === "go") rate("Trop lent", "Plus d'une seconde"); }, 1000);
         }
       }, R(1200, 3600));
     };
     const appui = () => {
-      if (etat === "attente") { clearTimeout(tm); fautes++; maj(); etat = "pause"; aff("faute", "Faux départ", "Attendez le vert"); ctx.after(essai, 1000); }
-      else if (etat === "go") { const rt = Math.round(maintenant() - t0); clearTimeout(tm); temps.push(rt); maj(); etat = "pause"; aff("", `${rt} ms`, rt <= c.seuil ? "Dans le temps" : "Un peu lent"); ctx.after(suivant, 800); }
-      else if (etat === "nogo") { clearTimeout(tm); fautes++; maj(); etat = "pause"; aff("faute", "Raté", "Le rouge veut dire stop"); ctx.after(suivant, 1000); }
+      if (etat === "attente") rate("Faux départ", "Il fallait attendre le vert");
+      else if (etat === "nogo") rate("Raté", "Le rouge veut dire stop");
+      else if (etat === "go") {
+        const rt = Math.round(maintenant() - t0);
+        if (rt < 80) return rate("Anticipation", `${rt} ms : trop rapide pour être une réaction`);
+        clearTimeout(tm); temps.push(rt); maj(); etat = "pause";
+        aff("", `${rt} ms`, rt <= c.seuil ? "Dans l'objectif" : "Au-dessus de l'objectif");
+        ctx.after(suivant, 800);
+      }
     };
     const finir = () => {
-      const moy = Math.round(moyenne(temps)), score = Math.round(clamp(scoreBas(moy, c.seuil) - 12 * fautes));
-      ctx.fin({ score, reussi: moy <= c.seuil && fautes <= c.fautesMax, mesure: `Moyenne de ${moy} ms, meilleur temps ${Math.min(...temps)} ms, ${pl(fautes, "faute")}`, code: `${score}%,${moy}ms,f${fautes}` });
+      const moy = Math.round(moyenne(temps)), sc = scoreBas(moy, c.seuil);
+      ctx.fin({ score: sc, reussi: moy <= c.seuil, mesure: `Moyenne de ${moy} ms (objectif ${c.seuil} ms), meilleur temps ${Math.min(...temps)} ms`, code: `${sc}%,${moy}ms` });
     };
     pad.addEventListener("pointerdown", e => { e.preventDefault(); if (ctx.vivant()) appui(); });
     ctx.key(e => { if (estFrappe(e)) { e.preventDefault(); appui(); } });
@@ -539,16 +555,16 @@ const Reflexes = {
 const Memoire = {
   id: "memoire", nom: "Mémoire", min: 1,
   desc: "Reproduisez une séquence lumineuse qui s'allonge à chaque tour.",
-  cfg: L => { const d = dD(L); return { taille: L < 60 ? 3 : 4, cible: Math.round(lerp(4, 12, d)), flash: Math.round(lerp(650, 300, d)), vies: L < 50 ? 2 : 1, inverse: L >= 75 }; },
-  consignes: c => [`Grille de ${c.taille} × ${c.taille} cases`, "Regardez la séquence, puis touchez les cases dans le même ordre", c.inverse ? "Attention : reproduisez la séquence à l'envers, de la dernière case à la première" : null, "La séquence gagne une case à chaque tour réussi", c.vies > 1 ? "Une erreur est pardonnée (la séquence est rejouée) ; la deuxième arrête l'atelier" : "La première erreur arrête l'atelier"],
-  seuil: c => `Atteindre une séquence de ${c.cible} cases`,
+  cfg: L => { const d = dD(L); return { taille: L < 60 ? 3 : 4, cible: Math.round(lerp(4, 12, d)), flash: Math.round(lerp(650, 300, d)), inverse: L >= 75 }; },
+  consignes: c => [`Grille de ${c.taille} × ${c.taille} cases`, "Regardez la séquence, puis touchez les cases dans le même ordre", c.inverse ? "Attention : reproduisez la séquence à l'envers, de la dernière case à la première" : null, "La séquence gagne une case à chaque tour réussi", "La moindre erreur arrête l'atelier"],
+  seuil: c => `Atteindre une séquence de ${c.cible} cases sans erreur`,
   run(ctx, c) {
     const N = c.taille * c.taille;
-    ctx.zone.innerHTML = `<div class="hud"><span>Longueur <b id="ml">0</b> / ${c.cible}</span><span>Erreurs restantes <b id="mv">${c.vies - 1}</b></span></div>
+    ctx.zone.innerHTML = `<div class="hud"><span>Longueur <b id="ml">0</b> / ${c.cible}</span><span>${c.inverse ? "À l'envers" : "Dans l'ordre"}</span></div>
       <div class="simon attente" id="sim" style="grid-template-columns:repeat(${c.taille},1fr)">${Array.from({ length: N }, (_, i) => `<button type="button" data-i="${i}" aria-label="Case ${i + 1}"></button>`).join("")}</div>
       <p class="message" id="mm">Regardez bien.</p>`;
     const sim = $("#sim"), cases = [...sim.children], msg = (t, cls = "") => { const m = $("#mm"); m.textContent = t; m.className = "message " + cls; };
-    let seq = [], attendu = [], pos = 0, ecoute = false, atteint = 0, vies = c.vies;
+    let seq = [], attendu = [], pos = 0, ecoute = false, atteint = 0;
     const ajouter = () => { let x; do x = R(0, N - 1); while (seq.length && x === seq[seq.length - 1] && Math.random() < 0.7); seq.push(x); };
     const montrer = () => {
       ecoute = false; sim.classList.add("attente"); msg(`Regardez : ${seq.length} cases.`);
@@ -559,7 +575,10 @@ const Memoire = {
       });
       ctx.after(() => { ecoute = true; pos = 0; attendu = c.inverse ? [...seq].reverse() : seq; sim.classList.remove("attente"); msg(c.inverse ? "À vous, à l'envers." : "À vous."); }, 500 + seq.length * c.flash * 1.4);
     };
-    const finir = () => { const score = Math.round(clamp(atteint / c.cible * 100)); ctx.fin({ score, reussi: atteint >= c.cible, mesure: `Séquence la plus longue réussie : ${atteint} case${atteint > 1 ? "s" : ""} sur ${c.cible}`, code: `${score}%,${atteint}/${c.cible}` }); };
+    const finir = ok => {
+      const score = ok ? 100 : Math.round(clamp(atteint / c.cible * 100));
+      ctx.fin({ score, reussi: ok, mesure: ok ? `Séquence de ${c.cible} cases reproduite sans erreur` : `Erreur sur la séquence de ${seq.length} cases (meilleure réussie : ${atteint})`, code: `${score}%,${atteint}/${c.cible}` });
+    };
     sim.addEventListener("pointerdown", e => {
       const b = e.target.closest("button"); if (!b || !ecoute || !ctx.vivant()) return;
       e.preventDefault();
@@ -569,14 +588,12 @@ const Memoire = {
         pos++;
         if (pos === attendu.length) {
           ecoute = false; atteint = seq.length; msg("Exact.", "bien");
-          if (atteint >= c.cible) return ctx.after(finir, 500);
+          if (atteint >= c.cible) return ctx.after(() => finir(true), 500);
           ajouter(); ctx.after(montrer, 700);
         }
       } else {
-        ecoute = false; vies--; b.classList.add("err"); setTimeout(() => b.classList.remove("err"), 400);
-        $("#mv").textContent = Math.max(0, vies - 1);
-        if (vies <= 0) { msg("Erreur.", "mal"); return ctx.after(finir, 700); }
-        msg("Erreur. La même séquence va être rejouée.", "mal"); ctx.after(montrer, 1200);
+        ecoute = false; b.classList.add("err"); cases[attendu[pos]].classList.add("flash");
+        msg("Erreur.", "mal"); ctx.after(() => finir(false), 900);
       }
     });
     for (let k = 0; k < Math.min(3, c.cible); k++) ajouter();
@@ -585,59 +602,68 @@ const Memoire = {
 };
 
 /* --- Calcul éclair --- */
+const TYPES_CALCUL = [
+  { min: 0, f: d => { const a = R(12, 40 + Math.round(900 * d)), b = R(12, 40 + Math.round(900 * d)); return [`${a} + ${b}`, a + b]; } },
+  { min: 0, f: d => { const a = R(40, 80 + Math.round(900 * d)), b = R(11, a - 5); return [`${a} − ${b}`, a - b]; } },
+  { min: 0, f: d => { const a = R(3, 9), b = R(12, 19 + Math.round(80 * d)); return [`${a} × ${b}`, a * b]; } },
+  { min: .1, f: d => { const b = R(3, 12 + Math.round(13 * d)), r = R(6, 15 + Math.round(40 * d)); return [`${b * r} ÷ ${b}`, r]; } },
+  { min: .2, f: d => { const M = 60 + Math.round(900 * d), a = R(20, M), b = R(12, M), c = R(11, a + b - 1); return [`${a} + ${b} − ${c}`, a + b - c]; } },
+  { min: .3, f: d => { const a = R(6, 15), b = R(6, 15 + Math.round(10 * d)), c = R(12, 99); return [`${a} × ${b} + ${c}`, a * b + c]; } },
+  { min: .4, f: d => { const n = R(12, 15 + Math.round(30 * d)); return [`${n}²`, n * n]; } },
+  { min: .45, f: () => { const a = R(3, 30), b = R(3, 30), c = R(3, 12); return [`(${a} + ${b}) × ${c}`, (a + b) * c]; } },
+  { min: .5, f: () => { const p = pick([5, 15, 20, 25, 30, 35, 40, 60, 75]), x = 20 * R(3, 40); return [`${p} % de ${x}`, p * x / 100]; } },
+  { min: .6, f: d => { const a = R(12, 25 + Math.round(40 * d)), b = R(11, 19 + Math.round(30 * d)); return [`${a} × ${b}`, a * b]; } },
+  { min: .7, f: () => { let a = R(6, 15), b = R(6, 15), c = R(3, 12), e = R(3, 12); if (a * b < c * e) [a, b, c, e] = [c, e, a, b]; return [`${a} × ${b} − ${c} × ${e}`, a * b - c * e]; } },
+  { min: .78, f: d => { const q = R(3, 9); let p; do p = R(1, q - 1); while ([2, 3, 5, 7].some(k => p % k === 0 && q % k === 0)); const x = q * R(4, 20 + Math.round(30 * d)); return [`${p}/${q} de ${x}`, p * x / q]; } },
+  { min: .85, f: () => { const n = R(4, 13); return [`${n}³`, n * n * n]; } },
+  { min: .9, f: () => { const a = R(25, 75), b = R(11, a - 3); return [`${a}² − ${b}²`, a * a - b * b]; } }
+];
 function questionCalcul(d) {
-  const types = [0, 1]; if (d >= .15) types.push(2); if (d >= .3) types.push(3); if (d >= .4) types.push(4); if (d >= .55) types.push(5); if (d >= .7) types.push(6); if (d >= .8) types.push(7);
-  const M = 10 + Math.round(90 * d);
-  switch (pick(types)) {
-    case 0: { const a = R(2, M), b = R(2, M); return { q: `${a} + ${b}`, r: a + b }; }
-    case 1: { const a = R(8, M + 20), b = R(2, a - 1); return { q: `${a} − ${b}`, r: a - b }; }
-    case 2: { const a = R(2, 5 + Math.round(10 * d)), b = R(3, 9 + Math.round(10 * d)); return { q: `${a} × ${b}`, r: a * b }; }
-    case 3: { const b = R(2, 9 + Math.round(6 * d)), r = R(2, 9 + Math.round(10 * d)); return { q: `${b * r} ÷ ${b}`, r }; }
-    case 4: { const a = R(10, M), b = R(2, M), c = R(2, a + b - 1); return { q: `${a} + ${b} − ${c}`, r: a + b - c }; }
-    case 5: { const a = R(3, 12), b = R(3, 12), c = R(2, M); return { q: `${a} × ${b} + ${c}`, r: a * b + c }; }
-    case 6: { const n = R(11, 11 + Math.round(15 * d)); return { q: `${n}²`, r: n * n }; }
-    default: { const p = pick([10, 15, 20, 25, 50, 75]), x = 20 * R(2, 25); return { q: `${p} % de ${x}`, r: p * x / 100 }; }
-  }
+  const dispo = TYPES_CALCUL.filter(t => t.min <= d);
+  const poids = t => 1 + 4 * t.min;
+  let r = Math.random() * dispo.reduce((s, t) => s + poids(t), 0);
+  const t = dispo.find(x => (r -= poids(x)) < 0) || dispo[0];
+  const [q, rep] = t.f(d);
+  return { q, r: rep };
 }
 const Calcul = {
   id: "calcul", nom: "Calcul éclair", min: 1,
   desc: "Enchaînez des calculs de tête, chacun contre la montre.",
-  cfg: L => { const d = dD(L); return { n: Math.round(lerp(8, 20, d)), sec: +lerp(12, 4.5, d).toFixed(1), erreursMax: L < 35 ? 2 : L < 70 ? 1 : 0, d }; },
-  consignes: c => [`${c.n} calculs à la suite`, `${virgule(c.sec)} s par calcul`, "Tapez le résultat puis Entrée", "Une réponse fausse ou trop lente compte comme une erreur"],
-  seuil: c => c.erreursMax ? `Au plus ${pl(c.erreursMax, "erreur")} sur ${c.n}` : `Aucune erreur sur ${c.n}`,
+  cfg: L => { const d = dD(L); return { n: Math.round(lerp(10, 25, d)), sec: +lerp(15, 6, d).toFixed(1), d }; },
+  consignes: c => [`${c.n} calculs à la suite, sans calculatrice`, `${virgule(c.sec)} s par calcul`, c.d >= .6 ? "Multiplications à deux chiffres, puissances, pourcentages et fractions" : c.d >= .3 ? "Opérations enchaînées, carrés et pourcentages" : "Additions, soustractions et multiplications", "Tapez le résultat puis Entrée", "Une réponse fausse ou trop lente arrête l'atelier"],
+  seuil: c => `${c.n} calculs justes sur ${c.n}`,
   run(ctx, c) {
-    ctx.zone.innerHTML = `<div class="hud"><span>Calcul <b id="cn">1</b> / ${c.n}</span><span>Erreurs <b id="ce">0</b></span></div>
+    ctx.zone.innerHTML = `<div class="hud"><span>Calcul <b id="cn">1</b> / ${c.n}</span><span>Justes <b id="cok">0</b></span></div>
       <div class="barre-t"><i id="cb"></i></div>
       <div class="question" id="cq"></div>
       <form class="rep" id="cf"><input id="ci" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Résultat" aria-label="Résultat"><button class="btn">Valider</button></form>
       <p class="message" id="cm"></p>`;
-    let i = 0, ok = 0, err = 0, q = null, finQ = 0, bloque = false;
+    let i = 0, ok = 0, q = null, finQ = 0, bloque = false;
     const montrer = () => {
       q = questionCalcul(c.d); bloque = false;
       $("#cn").textContent = i + 1; $("#cq").textContent = q.q; $("#cm").textContent = ""; $("#cm").className = "message";
       const inp = $("#ci"); inp.value = ""; inp.focus();
       finQ = maintenant() + c.sec * 1000;
     };
-    const finir = () => { const score = Math.round(ok / c.n * 100); ctx.fin({ score, reussi: err <= c.erreursMax, mesure: `${ok} / ${c.n} calculs justes, ${pl(err, "erreur")}`, code: `${score}%,${ok}/${c.n}` }); };
-    const suivant = (juste, texte) => {
-      bloque = true;
-      if (juste) ok++; else err++;
-      $("#ce").textContent = err;
-      const m = $("#cm"); m.textContent = texte; m.className = "message " + (juste ? "bien" : "mal");
-      i++;
-      ctx.after(() => i >= c.n ? finir() : montrer(), juste ? 250 : 900);
+    const rate = texte => {
+      bloque = true; const m = $("#cm"); m.textContent = texte; m.className = "message mal";
+      const score = Math.round(ok / c.n * 100);
+      ctx.after(() => ctx.fin({ score, reussi: false, mesure: `${texte} (${ok} / ${c.n} justes avant l'erreur)`, code: `${score}%,${ok}/${c.n}` }), 1400);
     };
     ctx.every(() => {
       if (bloque) return;
       const rest = finQ - maintenant();
       $("#cb").style.width = clamp(rest / (c.sec * 10)) + "%";
-      if (rest <= 0) suivant(false, `Temps écoulé. ${q.q} = ${q.r}`);
+      if (rest <= 0) rate(`Temps écoulé : ${q.q} = ${q.r}`);
     }, 60);
     $("#cf").onsubmit = e => {
       e.preventDefault(); if (bloque || !ctx.vivant()) return;
       const v = $("#ci").value.replace(/\s/g, "").replace(",", ".");
       if (!/^-?\d+(\.\d+)?$/.test(v)) return;
-      suivant(Number(v) === q.r, Number(v) === q.r ? "Juste." : `Faux. ${q.q} = ${q.r}`);
+      if (Number(v) !== q.r) return rate(`Faux : ${q.q} = ${q.r}`);
+      ok++; i++; bloque = true; $("#cok").textContent = ok;
+      if (i >= c.n) return ctx.fin({ score: 100, reussi: true, mesure: `${c.n} / ${c.n} calculs justes`, code: `100%,${c.n}/${c.n}` });
+      ctx.after(montrer, 150);
     };
     montrer();
   }
@@ -663,34 +689,40 @@ function texteFrappe(c) {
 const Frappe = {
   id: "frappe", nom: "Frappe", min: 10,
   desc: "Recopiez un texte au clavier, vite et sans faute.",
-  cfg: L => { const d = dDe(L, 10); return { long: Math.round(lerp(45, 170, d)), mpm: Math.round(lerp(18, 55, d)), prec: Math.round(lerp(92, 98, d)), accents: L >= 40, ponct: L >= 55, chiffres: L >= 75 }; },
-  consignes: c => [`Un texte d'environ ${c.long} caractères à recopier`, "Le chronomètre démarre à la première touche", c.chiffres ? "Majuscules, accents, ponctuation et nombres" : c.ponct ? "Majuscules, accents et ponctuation" : c.accents ? "Majuscules et accents" : "Minuscules, sans accent", "Le copier-coller est désactivé", "Terminez avec Entrée, ou en tapant le dernier caractère"],
-  seuil: c => `Au moins ${c.mpm} mots par minute et ${c.prec} % de précision`,
+  cfg: L => { const d = dDe(L, 10); return { long: Math.round(lerp(45, 170, d)), mpm: Math.round(lerp(18, 55, d)), accents: L >= 40, ponct: L >= 55, chiffres: L >= 75 }; },
+  consignes: c => [`Un texte d'environ ${c.long} caractères à recopier exactement`, "Le chronomètre démarre à la première touche", c.chiffres ? "Majuscules, accents, ponctuation et nombres" : c.ponct ? "Majuscules, accents et ponctuation" : c.accents ? "Majuscules et accents" : "Minuscules, sans accent", "Le copier-coller est désactivé", "Le moindre caractère faux arrête l'atelier"],
+  seuil: c => `Au moins ${c.mpm} mots par minute, sans aucune faute`,
   run(ctx, c) {
     const texte = texteFrappe(c);
-    ctx.zone.innerHTML = `<div class="hud"><span>Vitesse <b id="fv">0</b> mots/min</span><span><b id="fl">0</b> / ${texte.length} caractères</span></div>
+    ctx.zone.innerHTML = `<div class="hud"><span>Vitesse <b id="fv">0</b> mots/min · objectif ${c.mpm}</span><span><b id="fl">0</b> / ${texte.length} caractères</span></div>
       <div class="texte-cible" id="ft">${[...texte].map(ch => `<span>${esc(ch)}</span>`).join("")}</div>
-      <textarea class="saisie" id="fs" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Commencez à taper ici…" aria-label="Votre saisie"></textarea>`;
+      <textarea class="saisie" id="fs" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Commencez à taper ici…" aria-label="Votre saisie"></textarea>
+      <p class="message" id="fm"></p>`;
     const fs = $("#fs"), spans = [...$("#ft").children];
     let t0 = 0, fini = false;
     const mpm = s => t0 ? Math.round((s.length / 5) / Math.max(1 / 60, (maintenant() - t0) / 60000)) : 0;
-    const finir = () => {
-      if (fini) return; fini = true;
-      const s = fs.value.replace(/\n/g, ""), v = mpm(s), acc = Math.max(0, 1 - levenshtein(s, texte) / texte.length), p = Math.round(acc * 1000) / 10;
-      const score = Math.round(clamp(v / c.mpm, 0, 1) * 60 + clamp((p - 85) / 15, 0, 1) * 40);
-      ctx.fin({ score, reussi: v >= c.mpm && p >= c.prec, mesure: `${v} mots par minute, ${virgule(p)} % de précision`, code: `${score}%,${v}mpm,${p}%` });
-    };
     ["paste", "drop", "contextmenu"].forEach(t => fs.addEventListener(t, e => e.preventDefault()));
-    fs.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); if (fs.value.length >= texte.length * 0.8) finir(); } });
+    fs.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
     fs.addEventListener("input", () => {
-      if (!ctx.vivant()) return;
+      if (!ctx.vivant() || fini) return;
       if (!t0) t0 = maintenant();
       const s = fs.value.replace(/\n/g, "");
-      spans.forEach((sp, i) => { sp.className = i < s.length ? (s[i] === texte[i] ? "ok" : "ko") : i === s.length ? "cur" : ""; });
+      let k = 0; while (k < s.length && s[k] === texte[k]) k++;
+      spans.forEach((sp, i) => { sp.className = i < k ? "ok" : i < s.length ? "ko" : i === s.length ? "cur" : ""; });
       $("#fl").textContent = s.length; $("#fv").textContent = mpm(s);
-      if (s.length >= texte.length) finir();
+      if (k < s.length) {
+        fini = true; fs.readOnly = true;
+        const att = texte[k] === " " ? "une espace" : `« ${texte[k]} »`, score = Math.round(k / texte.length * 100);
+        $("#fm").textContent = `Faute au caractère ${k + 1} : ${att} était attendu.`; $("#fm").className = "message mal";
+        return ctx.after(() => ctx.fin({ score, reussi: false, mesure: `Faute de frappe au caractère ${k + 1} sur ${texte.length}`, code: `${score}%,faute@${k + 1}` }), 1400);
+      }
+      if (s.length >= texte.length) {
+        fini = true; fs.readOnly = true;
+        const v = mpm(s), score = scoreHaut(v, c.mpm);
+        ctx.fin({ score, reussi: v >= c.mpm, mesure: `${v} mots par minute sans faute (objectif ${c.mpm})`, code: `${score}%,${v}mpm` });
+      }
     });
-    ctx.every(() => { if (t0) $("#fv").textContent = mpm(fs.value); }, 500);
+    ctx.every(() => { if (t0 && !fini) $("#fv").textContent = mpm(fs.value); }, 500);
     spans[0].className = "cur"; fs.focus();
   }
 };
@@ -699,30 +731,37 @@ const Frappe = {
 const Oeil = {
   id: "oeil", nom: "Œil", min: 15,
   desc: "Repérez la seule case dont la nuance diffère des autres.",
-  cfg: L => { const d = dDe(L, 15); return { g: 3 + Math.round(lerp(0, 5, d)), delta: +lerp(16, 3.5, d).toFixed(1), manches: Math.round(lerp(8, 15, d)), sec: +lerp(10, 4, d).toFixed(1), erreursMax: L < 50 ? 2 : L < 80 ? 1 : 0 }; },
-  consignes: c => [`${c.manches} grilles de ${c.g} × ${c.g} cases`, "Une seule case a une nuance légèrement différente : touchez-la", `${virgule(c.sec)} s par grille`, `Écart de luminosité : ${virgule(c.delta)} %`],
-  seuil: c => c.erreursMax ? `Au plus ${pl(c.erreursMax, "erreur")} sur ${c.manches}` : `Aucune erreur sur ${c.manches}`,
+  cfg: L => { const d = dDe(L, 15); return { g: 3 + Math.round(lerp(0, 5, d)), delta: +lerp(16, 3.5, d).toFixed(1), manches: Math.round(lerp(8, 15, d)), sec: +lerp(10, 4, d).toFixed(1) }; },
+  consignes: c => [`${c.manches} grilles de ${c.g} × ${c.g} cases`, "Une seule case a une nuance légèrement différente : touchez-la", `${virgule(c.sec)} s par grille`, `Écart de luminosité : ${virgule(c.delta)} %`, "Une mauvaise case ou un temps dépassé arrête l'atelier"],
+  seuil: c => `${c.manches} grilles réussies sur ${c.manches}`,
   run(ctx, c) {
     const N = c.g * c.g;
-    ctx.zone.innerHTML = `<div class="hud"><span>Grille <b id="on">1</b> / ${c.manches}</span><span>Erreurs <b id="oe">0</b></span></div>
+    ctx.zone.innerHTML = `<div class="hud"><span>Grille <b id="on">1</b> / ${c.manches}</span><span>Réussies <b id="ook">0</b></span></div>
       <div class="barre-t"><i id="ob"></i></div>
-      <div class="grille" id="og" style="grid-template-columns:repeat(${c.g},1fr)">${Array.from({ length: N }, (_, i) => `<button type="button" data-i="${i}" aria-label="Case ${i + 1}"></button>`).join("")}</div>`;
+      <div class="grille" id="og" style="grid-template-columns:repeat(${c.g},1fr)">${Array.from({ length: N }, (_, i) => `<button type="button" data-i="${i}" aria-label="Case ${i + 1}"></button>`).join("")}</div>
+      <p class="message" id="om"></p>`;
     const cases = [...$("#og").children];
-    let i = 0, ok = 0, err = 0, cible = 0, finM = 0, bloque = true;
+    let i = 0, ok = 0, cible = 0, finM = 0, bloque = true;
     const manche = () => {
       const h = R(0, 359), s = R(45, 75), l = R(40, 58), sg = l > 50 ? -1 : 1;
       cible = R(0, N - 1);
       cases.forEach((b, k) => { b.className = ""; b.style.background = `hsl(${h} ${s}% ${k === cible ? l + sg * c.delta : l}%)`; });
       $("#on").textContent = i + 1; finM = maintenant() + c.sec * 1000; bloque = false;
     };
-    const finir = () => { const score = Math.round(ok / c.manches * 100); ctx.fin({ score, reussi: err <= c.erreursMax, mesure: `${ok} / ${c.manches} cases repérées, ${pl(err, "erreur")}`, code: `${score}%,${ok}/${c.manches}` }); };
-    const suite = (juste, b) => {
-      bloque = true; if (juste) ok++; else err++;
-      $("#oe").textContent = err; cases[cible].classList.add("vu"); if (b && !juste) b.classList.add("err");
-      i++; ctx.after(() => i >= c.manches ? finir() : manche(), juste ? 300 : 900);
+    const rate = (texte, b) => {
+      bloque = true; cases[cible].classList.add("vu"); if (b) b.classList.add("err");
+      $("#om").textContent = texte; $("#om").className = "message mal";
+      const score = Math.round(ok / c.manches * 100);
+      ctx.after(() => ctx.fin({ score, reussi: false, mesure: `${texte} à la grille ${i + 1} (${ok} / ${c.manches} réussies)`, code: `${score}%,${ok}/${c.manches}` }), 1100);
     };
-    $("#og").addEventListener("pointerdown", e => { const b = e.target.closest("button"); if (!b || bloque || !ctx.vivant()) return; e.preventDefault(); suite(+b.dataset.i === cible, b); });
-    ctx.every(() => { if (bloque) return; const rest = finM - maintenant(); $("#ob").style.width = clamp(rest / (c.sec * 10)) + "%"; if (rest <= 0) suite(false, null); }, 60);
+    $("#og").addEventListener("pointerdown", e => {
+      const b = e.target.closest("button"); if (!b || bloque || !ctx.vivant()) return; e.preventDefault();
+      if (+b.dataset.i !== cible) return rate("Mauvaise case", b);
+      bloque = true; ok++; i++; $("#ook").textContent = ok; b.classList.add("vu");
+      if (i >= c.manches) return ctx.after(() => ctx.fin({ score: 100, reussi: true, mesure: `${c.manches} / ${c.manches} cases repérées`, code: `100%,${c.manches}/${c.manches}` }), 300);
+      ctx.after(manche, 300);
+    });
+    ctx.every(() => { if (bloque) return; const rest = finM - maintenant(); $("#ob").style.width = clamp(rest / (c.sec * 10)) + "%"; if (rest <= 0) rate("Temps dépassé", null); }, 60);
     manche();
   }
 };
@@ -732,29 +771,34 @@ const Rythme = {
   id: "rythme", nom: "Rythme", min: 25,
   desc: "Tenez le tempo d'un métronome, même quand il se tait.",
   cfg: L => { const d = dDe(L, 25); return { bpm: Math.round(lerp(70, 130, d)), frappes: Math.round(lerp(8, 16, d)), seul: L >= 60, seuil: Math.round(lerp(110, 45, d)) }; },
-  consignes: c => [`Tempo : ${c.bpm} battements par minute`, "4 battements d'écoute, puis tapez sur chaque battement (pad ou Espace)", c.seul ? `Après l'écoute, le métronome se tait : tenez seul les ${c.frappes} battements` : `${c.frappes} battements à taper avec le métronome`, "Activez le son si possible", "Un battement manqué compte comme une demi-période d'écart"],
-  seuil: c => `Écart moyen d'au plus ${c.seuil} ms`,
+  consignes: c => [`Tempo : ${c.bpm} battements par minute`, "4 battements d'écoute, puis tapez sur chaque battement (pad ou Espace)", c.seul ? `Après l'écoute, le métronome se tait : tenez seul les ${c.frappes} battements` : `${c.frappes} battements à taper avec le métronome`, "Activez le son si possible", `Un battement manqué, une frappe en trop ou un écart de plus de ${3 * c.seuil} ms arrête l'atelier`],
+  seuil: c => `Écart moyen d'au plus ${c.seuil} ms, sans erreur`,
   run(ctx, c) {
     ctx.zone.innerHTML = `<div class="hud"><span id="rs">Écoute</span><span>Frappes <b id="rk">0</b> / ${c.frappes}</span></div>
       <div class="pad" id="rp" role="button" tabindex="-1"><div class="metro" id="rm">♩</div></div><p class="message" id="rmsg">Écoutez les 4 premiers battements.</p>`;
-    const P = 60000 / c.bpm, total = 4 + c.frappes, taps = [];
+    const P = 60000 / c.bpm, total = 4 + c.frappes, ecarts = Array(c.frappes).fill(null), tol = 3 * c.seuil;
     const ac = c.ac || null;
     if (ac) ctx.audio(ac);
     const T0 = maintenant() + 800, A0 = ac ? ac.currentTime + 0.8 : 0;
     const bip = (k, fort) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(), t = A0 + k * P / 1000; o.frequency.value = fort ? 1320 : 880; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.1); };
     for (let k = 0; k < total; k++) if (k < 4 || !c.seul) bip(k, k < 4);
     const m = $("#rm");
-    let prochain = 0;
+    let prochain = 0, fini = false;
+    const faits = () => ecarts.filter(v => v !== null);
+    const rate = texte => {
+      if (fini) return; fini = true;
+      try { ac && ac.suspend(); } catch (e) {}
+      $("#rmsg").textContent = texte; $("#rmsg").className = "message mal"; m.classList.add("tape");
+      const n = faits().length, score = Math.round(n ? scoreBas(moyenne(faits()), c.seuil) * n / c.frappes : 0);
+      ctx.after(() => ctx.fin({ score, reussi: false, mesure: `${texte} (${n} / ${c.frappes} battements tenus)`, code: `${score}%,${n}/${c.frappes}` }), 1100);
+    };
     const finir = () => {
-      const devs = [];
-      let extras = 0; const meilleurs = Array(c.frappes).fill(Infinity);
-      taps.forEach(t => { const j = Math.round((t - T0) / P) - 4; if (j < 0 || j >= c.frappes) { extras++; return; } const dv = Math.abs(t - (T0 + (j + 4) * P)); if (meilleurs[j] !== Infinity) extras++; meilleurs[j] = Math.min(meilleurs[j], dv); });
-      meilleurs.forEach(v => devs.push(v === Infinity ? P / 2 : v));
-      const moy = Math.round(moyenne(devs)), manques = meilleurs.filter(v => v === Infinity).length;
-      const score = Math.round(clamp(scoreBas(moy, c.seuil) - 4 * extras));
-      ctx.fin({ score, reussi: moy <= c.seuil, mesure: `Écart moyen de ${moy} ms, ${pl(manques, "battement manqué", "battements manqués")}, ${pl(extras, "frappe en trop", "frappes en trop")}`, code: `${score}%,${moy}ms,m${manques},x${extras}` });
+      fini = true;
+      const moy = Math.round(moyenne(ecarts)), score = scoreBas(moy, c.seuil);
+      ctx.fin({ score, reussi: moy <= c.seuil, mesure: `Écart moyen de ${moy} ms (objectif ${c.seuil} ms), sans battement manqué`, code: `${score}%,${moy}ms` });
     };
     ctx.frame(() => {
+      if (fini) return false;
       const t = maintenant();
       while (prochain < total && t >= T0 + prochain * P) {
         const k = prochain++;
@@ -762,12 +806,19 @@ const Rythme = {
         if (k < 4) m.textContent = k + 1;
         if (k === 3) { $("#rs").textContent = "À vous"; $("#rmsg").textContent = c.seul ? "Le métronome se tait : continuez seul." : "Tapez sur chaque battement."; }
       }
-      if (t > T0 + (total - 0.4) * P) { finir(); return false; }
+      /* battement dont la fenêtre est passée sans frappe */
+      for (let j = 0; j < c.frappes; j++) if (ecarts[j] === null && t > T0 + (j + 4.5) * P) { rate(`Battement ${j + 1} manqué`); return false; }
+      if (t > T0 + (total - 0.5) * P) { finir(); return false; }
     });
     const tap = () => {
+      if (fini) return;
       const t = maintenant(); if (t < T0 + 3.5 * P) return;
-      taps.push(t); $("#rk").textContent = Math.min(c.frappes, taps.length);
-      m.textContent = taps.length; m.classList.add("tape"); setTimeout(() => m.classList.remove("tape"), 120);
+      const j = Math.round((t - T0) / P) - 4; if (j >= c.frappes) return;
+      if (ecarts[j] !== null) return rate("Frappe en trop");
+      const dv = Math.abs(t - (T0 + (j + 4) * P));
+      if (dv > tol) return rate(`Hors tempo : ${Math.round(dv)} ms d'écart`);
+      ecarts[j] = dv; $("#rk").textContent = faits().length;
+      m.textContent = faits().length; m.classList.add("tape"); setTimeout(() => m.classList.remove("tape"), 120);
     };
     $("#rp").addEventListener("pointerdown", e => { e.preventDefault(); if (ctx.vivant()) tap(); });
     ctx.key(e => { if (estFrappe(e)) { e.preventDefault(); tap(); } });
@@ -778,24 +829,33 @@ const Rythme = {
 const Chrono = {
   id: "chrono", nom: "Horloge interne", min: 35,
   desc: "Estimez une durée sans rien pour voir le temps passer.",
-  cfg: L => { const d = dDe(L, 35); return { essais: Math.round(lerp(3, 5, d)), max: Math.round(lerp(8, 20, d)), seuil: +lerp(15, 6, d).toFixed(1), distraction: L >= 70 }; },
-  consignes: c => [`${c.essais} durées à estimer, de 3 à ${c.max} secondes`, "Touchez le pad (ou Espace) pour démarrer, puis à nouveau quand la durée est écoulée", "Aucun chronomètre n'est affiché", c.distraction ? "Des chiffres défilent pour brouiller votre comptage" : null],
-  seuil: c => `Écart moyen d'au plus ${virgule(c.seuil)} %`,
+  cfg: L => { const d = dDe(L, 35); return { essais: Math.round(lerp(3, 5, d)), max: Math.round(lerp(8, 20, d)), tol: +lerp(15, 6, d).toFixed(1), distraction: L >= 70 }; },
+  consignes: c => [`${c.essais} durées à estimer, de 3 à ${c.max} secondes`, "Touchez le pad (ou Espace) pour démarrer, puis à nouveau quand la durée est écoulée", "Aucun chronomètre n'est affiché", c.distraction ? "Des chiffres défilent pour brouiller votre comptage" : null, `Une estimation à plus de ${virgule(c.tol)} % de la cible arrête l'atelier`],
+  seuil: c => `Chaque estimation à moins de ${virgule(c.tol)} % de la cible`,
   run(ctx, c) {
     ctx.zone.innerHTML = `<div class="hud"><span>Durée <b id="hn">1</b> / ${c.essais}</span><span>Écart moyen <b id="he">–</b></span></div><div class="pad" id="hp" role="button" tabindex="-1"></div>`;
     const pad = $("#hp"), ecarts = [];
     let i = 0, etat = "pret", cible = 0, t0 = 0, iv = null;
     const prep = () => { cible = R(3, c.max) + (c.max > 10 && Math.random() < 0.4 ? 0.5 : 0); etat = "pret"; $("#hn").textContent = i + 1; pad.className = "pad"; pad.innerHTML = `${virgule(cible)} secondes<small>Touchez pour démarrer</small>`; };
     const brouiller = () => { if (etat !== "cours") return; pad.innerHTML = `<span class="distrait">${R(1, 59)}</span><small>Touchez quand ${virgule(cible)} s sont écoulées</small>`; iv = ctx.after(brouiller, R(300, 1400)); };
-    const finir = () => { const moy = Math.round(moyenne(ecarts) * 10) / 10, score = scoreBas(moy, c.seuil); ctx.fin({ score, reussi: moy <= c.seuil, mesure: `Écart moyen de ${virgule(moy)} %`, code: `${score}%,${moy}%` }); };
     const appui = () => {
       if (etat === "pret") { etat = "cours"; t0 = maintenant(); pad.className = "pad go"; pad.innerHTML = `…<small>Touchez quand ${virgule(cible)} s sont écoulées</small>`; if (c.distraction) { pad.className = "pad"; brouiller(); } }
       else if (etat === "cours") {
         clearTimeout(iv); etat = "pause";
         const t = (maintenant() - t0) / 1000, e = Math.abs(t - cible) / cible * 100;
+        if (e > c.tol) {
+          pad.className = "pad faute"; pad.innerHTML = `${virgule(t, 2)} s<small>Cible ${virgule(cible)} s : écart de ${virgule(e)} %, au-delà de ${virgule(c.tol)} %</small>`;
+          const score = Math.round(ecarts.length / c.essais * 100 * 0.9);
+          return ctx.after(() => ctx.fin({ score, reussi: false, mesure: `Estimation ${i + 1} trop éloignée : ${virgule(t, 2)} s pour ${virgule(cible)} s (${virgule(e)} %)`, code: `${score}%,${i}/${c.essais}` }), 1600);
+        }
         ecarts.push(e); $("#he").textContent = virgule(moyenne(ecarts)) + " %";
         pad.className = "pad"; pad.innerHTML = `${virgule(t, 2)} s<small>Cible ${virgule(cible)} s, écart de ${virgule(e)} %</small>`;
-        i++; ctx.after(() => i >= c.essais ? finir() : prep(), 1600);
+        i++;
+        ctx.after(() => {
+          if (i < c.essais) return prep();
+          const moy = Math.round(moyenne(ecarts) * 10) / 10, score = scoreBas(moy, c.tol);
+          ctx.fin({ score, reussi: true, mesure: `${c.essais} estimations réussies, écart moyen de ${virgule(moy)} %`, code: `${score}%,${moy}%` });
+        }, 1600);
       }
     };
     pad.addEventListener("pointerdown", e => { e.preventDefault(); if (ctx.vivant()) appui(); });
@@ -808,11 +868,11 @@ const Chrono = {
 const Trace = {
   id: "trace", nom: "Tracé", min: 45,
   desc: "Guidez votre trait dans un couloir sinueux sans jamais en sortir.",
-  cfg: L => { const d = dDe(L, 45); return { virages: Math.round(lerp(4, 10, d)), largeur: Math.round(lerp(44, 16, d)), sortiesMax: L < 70 ? 2 : L < 90 ? 1 : 0, limite: Math.round(lerp(45, 22, d)) }; },
-  consignes: c => ["Posez le doigt ou la souris sur le disque de départ, puis suivez le couloir jusqu'au drapeau", `Couloir de ${c.largeur} pixels de large, ${c.virages} virages`, "Sortir du couloir renvoie au départ et compte une sortie", "Lever le doigt est permis : reprenez là où vous vous êtes arrêté", `${c.limite} s au maximum, dès que le couloir apparaît`],
-  seuil: c => `Arriver en moins de ${c.limite} s avec ${c.sortiesMax ? `au plus ${pl(c.sortiesMax, "sortie")}` : "aucune sortie"}`,
+  cfg: L => { const d = dDe(L, 45); return { virages: Math.round(lerp(4, 10, d)), largeur: Math.round(lerp(44, 16, d)), limite: Math.round(lerp(45, 22, d)) }; },
+  consignes: c => ["Posez le doigt ou la souris sur le disque de départ, puis suivez le couloir jusqu'au disque vert", `Couloir de ${c.largeur} pixels de large, ${c.virages} virages`, "Lever le doigt est permis : reprenez sur le point lumineux", `${c.limite} s au maximum, dès que le couloir apparaît`, "La moindre sortie du couloir arrête l'atelier"],
+  seuil: c => `Arriver en moins de ${c.limite} s sans sortir du couloir`,
   run(ctx, c) {
-    ctx.zone.innerHTML = `<div class="hud"><span>Sorties <b id="ts">0</b> / ${c.sortiesMax} permises</span><span>Temps <b id="tt">${c.limite},0</b> s</span></div><canvas class="trace" id="tc"></canvas><p class="message" id="tm">Posez-vous sur le disque de départ.</p>`;
+    ctx.zone.innerHTML = `<div class="hud"><span>Parcours <b id="tp">0</b> %</span><span>Temps <b id="tt">${c.limite},0</b> s</span></div><canvas class="trace" id="tc"></canvas><p class="message" id="tm">Posez-vous sur le disque de départ.</p>`;
     const cv = $("#tc"), W = Math.max(280, cv.clientWidth), H = W < 520 ? 340 : 380, dpr = window.devicePixelRatio || 1;
     cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
     const g = cv.getContext("2d"); g.scale(dpr, dpr);
@@ -826,55 +886,57 @@ const Trace = {
       for (let s = 0; s < steps; s++) { const t = s / steps, t2 = t * t, t3 = t2 * t; pts.push([0, 1].map(a => 0.5 * (2 * p1[a] + (-p0[a] + p2[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * t3))); }
     }
     pts.push(ctrl[ctrl.length - 1]);
-    const half = c.largeur / 2, fenetre = 30, fin = pts.length - 1;
-    let etat = "depart", progres = 0, sorties = 0, t0 = maintenant(), curseur = null, flash = 0, termine = false;
+    const half = c.largeur / 2, fenetre = 30, fin = pts.length - 1, t0 = maintenant();
+    let etat = "depart", progres = 0, curseur = null, flash = 0, termine = false, dedans = false;
     const dist = (x, y, a, b) => { let best = Infinity, idx = -1; for (let j = Math.max(0, a); j <= Math.min(fin, b); j++) { const d = Math.hypot(pts[j][0] - x, pts[j][1] - y); if (d < best) { best = d; idx = j; } } return [best, idx]; };
     const msg = (t, cls = "") => { const e = $("#tm"); e.textContent = t; e.className = "message " + cls; };
-    const finir = arrive => {
-      if (termine) return; termine = true;
-      const t = (maintenant() - t0) / 1000;
-      const score = arrive ? Math.round(clamp(100 - 20 * sorties - 40 * Math.max(0, t / c.limite - 0.5))) : Math.round(progres / fin * 50);
-      ctx.fin({ score, reussi: arrive && sorties <= c.sortiesMax && t <= c.limite, mesure: arrive ? `Arrivée en ${virgule(t, 1)} s avec ${pl(sorties, "sortie")}` : `Temps écoulé à ${Math.round(progres / fin * 100)} % du parcours, ${pl(sorties, "sortie")}`, code: `${score}%,${arrive ? virgule(t, 1).replace(",", ".") + "s" : "inacheve"},s${sorties}` });
+    const pct = () => Math.round(progres / fin * 100);
+    const rate = texte => {
+      if (termine) return; termine = true; etat = "fini"; flash = maintenant(); msg(texte, "mal");
+      const score = Math.round(pct() * 0.85);
+      ctx.after(() => ctx.fin({ score, reussi: false, mesure: `${texte} à ${pct()} % du parcours`, code: `${score}%,${pct()}%` }), 900);
+    };
+    const reussir = () => {
+      if (termine) return; termine = true; etat = "fini";
+      const t = (maintenant() - t0) / 1000, score = scoreBas(t, c.limite);
+      msg("Arrivé !", "bien");
+      ctx.after(() => ctx.fin({ score, reussi: true, mesure: `Arrivée en ${virgule(t, 1)} s sans sortie (limite ${c.limite} s)`, code: `${score}%,${t.toFixed(1)}s` }), 400);
     };
     const bouger = (x, y, appuye) => {
-      if (etat === "depart" && appuye && Math.hypot(x - pts[0][0], y - pts[0][1]) <= Math.max(half + 6, 18)) { etat = "trace"; msg("Suivez le couloir."); }
+      if (etat === "depart" && appuye && Math.hypot(x - pts[0][0], y - pts[0][1]) <= Math.max(half + 6, 18)) { etat = "trace"; dedans = false; msg("Suivez le couloir."); }
       if (etat !== "trace") return;
       const [d] = dist(x, y, 0, fin);
-      if (d > half) {
-        sorties++; $("#ts").textContent = sorties; flash = maintenant(); etat = "depart"; progres = 0;
-        msg("Sortie ! Retour au départ.", "mal"); return;
-      }
+      /* une sortie ne compte qu'après être réellement entré dans le couloir */
+      if (d > half) return dedans ? rate("Sortie du couloir") : undefined;
+      dedans = true;
       const [d2, j] = dist(x, y, progres, progres + fenetre);
-      if (d2 <= half && j > progres) progres = j;
-      if (progres >= fin - 2) { progres = fin; etat = "fini"; msg("Arrivé !", "bien"); ctx.after(() => finir(true), 400); }
+      if (d2 <= half && j > progres) { progres = j; $("#tp").textContent = pct(); }
+      if (progres >= fin - 4 || (progres > fin * 0.95 && Math.hypot(x - pts[fin][0], y - pts[fin][1]) <= Math.max(8, half * 0.7))) { progres = fin; reussir(); }
     };
     const pos = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * W / b.width, (e.clientY - b.top) * H / b.height]; };
     cv.addEventListener("pointerdown", e => {
-      if (!ctx.vivant() || etat === "fini") return;
+      if (!ctx.vivant() || termine) return;
       e.preventDefault(); const [x, y] = pos(e); curseur = [x, y];
       const p = pts[progres];
       if (Math.hypot(x - p[0], y - p[1]) <= Math.max(half + 6, 18)) {
         try { cv.setPointerCapture(e.pointerId); } catch (er) {}
-        etat = "trace"; msg("Suivez le couloir.");
+        etat = "trace"; dedans = false; msg("Suivez le couloir.");
       } else msg(progres ? "Reprenez sur le point lumineux." : "Commencez sur le disque de départ.");
     });
     cv.addEventListener("pointermove", e => {
-      if (!ctx.vivant()) return;
+      if (!ctx.vivant() || termine) return;
       const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-      for (const ev of (evs.length ? evs : [e])) { const [x, y] = pos(ev); curseur = [x, y]; bouger(x, y, e.buttons > 0 || e.pointerType === "touch"); }
+      for (const ev of (evs.length ? evs : [e])) { const [x, y] = pos(ev); curseur = [x, y]; bouger(x, y, e.buttons > 0 || e.pointerType === "touch"); if (termine) break; }
     });
     const lever = () => { if (etat === "trace") { etat = "pause"; msg("Pause. Reprenez sur le point lumineux."); } };
     cv.addEventListener("pointerup", lever); cv.addEventListener("pointercancel", lever);
     const chemin = (a, b) => { g.beginPath(); g.moveTo(pts[a][0], pts[a][1]); for (let j = a + 1; j <= b; j++) g.lineTo(pts[j][0], pts[j][1]); };
     ctx.frame(() => {
-      if (!termine) {
-        const rest = c.limite - (maintenant() - t0) / 1000;
-        $("#tt").textContent = virgule(Math.max(0, rest), 1).replace(/^(\d+)$/, "$1,0");
-        if (rest <= 0 && etat !== "fini") { finir(false); return false; }
-      }
+      const rest = c.limite - (maintenant() - t0) / 1000;
+      if (!termine) { $("#tt").textContent = virgule(Math.max(0, rest), 1).replace(/^(\d+)$/, "$1,0"); if (rest <= 0) rate("Temps écoulé"); }
       g.clearRect(0, 0, W, H);
       g.lineCap = g.lineJoin = "round";
-      chemin(0, fin); g.strokeStyle = maintenant() - flash < 300 ? col("--rouge") : col("--nuit3"); g.lineWidth = c.largeur; g.stroke();
+      chemin(0, fin); g.strokeStyle = flash && maintenant() - flash < 900 ? col("--rouge") : col("--nuit3"); g.lineWidth = c.largeur; g.stroke();
       chemin(0, fin); g.strokeStyle = col("--trait"); g.lineWidth = 1.5; g.setLineDash([4, 6]); g.stroke(); g.setLineDash([]);
       if (progres > 0) { chemin(0, progres); g.strokeStyle = col("--acc"); g.lineWidth = Math.max(4, c.largeur * 0.35); g.stroke(); }
       const [ax, ay] = pts[fin]; g.fillStyle = col("--vert"); g.beginPath(); g.arc(ax, ay, Math.max(8, half * 0.7), 0, 7); g.fill();
@@ -899,55 +961,73 @@ function circuit(L) {
 }
 
 /* ===================== CIRCUIT ===================== */
+/* Un atelier n'est validé qu'avec une note d'au moins NOTE_MIN et sans erreur.
+   Sinon il peut être recommencé, avec un nouveau tirage, tant que l'heure n'est pas écoulée. */
 const Circuit = {
   start(root, L) {
     const liste = circuit(L);
-    const st = S.mod = { i: 0, res: [], details: () => `ateliers=${st.res.filter(r => r.reussi).length}/${liste.length};` + liste.map((a, k) => `${a.id}=${st.res[k] ? (st.res[k].reussi ? "ok" : "ko") + "," + st.res[k].code : "na"}`).join(";") };
-    const scoreGlobal = () => Math.round(st.res.reduce((s, r) => s + r.score, 0) / liste.length);
+    const suivi = liste.map(() => ({ essais: 0, valide: null, meilleur: null }));
+    const final = k => suivi[k].valide || suivi[k].meilleur;
+    const st = S.mod = {
+      i: 0,
+      recap: () => liste.map((a, k) => final(k) ? { ...final(k), reussi: !!suivi[k].valide, essais: suivi[k].essais } : null),
+      details: () => `ateliers=${suivi.filter(x => x.valide).length}/${liste.length};` + liste.map((a, k) => { const f = final(k); return `${a.id}=${f ? (suivi[k].valide ? "ok" : "ko") + "," + f.code + ",t" + suivi[k].essais : "na"}`; }).join(";")
+    };
+    const scoreGlobal = () => Math.round(liste.reduce((s, a, k) => s + (final(k) ? final(k).score : 0), 0) / liste.length);
     root.innerHTML = `<div class="scene">
       <div class="eh"><span><b id="ct"></b></span><button class="btn second petit" id="stop">Arrêter l'épreuve</button></div>
       <div class="etapes" id="etp">${liste.map(() => "<i></i>").join("")}</div>
       <div id="zone"></div></div>`;
     const zone = $("#zone");
-    const majEtapes = () => [...$("#etp").children].forEach((el, k) => el.className = k < st.res.length ? (st.res[k].reussi ? "ok" : "ko") : k === st.i ? "cours" : "");
-    const conclure = () => {
-      const ok = st.res.every(r => r.reussi), rates = liste.filter((a, k) => !st.res[k].reussi).map(a => a.id);
-      terminer({ statut: ok ? "reussi" : "echoue", score: scoreGlobal(), details: st.details(), raison: ok ? "" : "ateliers_non_valides:" + rates.join(","), ateliers: st.res });
+    const majEtapes = rate => [...$("#etp").children].forEach((el, k) => el.className = suivi[k].valide ? "ok" : k === st.i ? (rate ? "ko" : "cours") : "");
+    const conclure = () => terminer({ statut: "reussi", score: scoreGlobal(), details: st.details(), ateliers: st.recap() });
+    Circuit.expire = () => terminer({ statut: "temps_ecoule", score: scoreGlobal(), details: st.details(), raison: "temps_ecoule", ateliers: st.recap() });
+    $("#stop").onclick = () => { arreterAtelier(); terminer({ statut: "echoue", score: scoreGlobal(), details: st.details(), raison: "abandon_volontaire", ateliers: st.recap() }); };
+    const titre = () => { const a = liste[st.i]; $("#ct").textContent = `Atelier ${st.i + 1} sur ${liste.length} · ${a.nom}` + (suivi[st.i].essais ? ` · essai ${suivi[st.i].essais + 1}` : ""); };
+    const lancerAtelier = () => {
+      const a = liste[st.i], c = a.cfg(L);
+      /* le son doit être débloqué par un geste de l'utilisateur */
+      if (a.id === "rythme") try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); c.ac.resume(); } catch (e) { c.ac = null; }
+      titre(); majEtapes(false);
+      let k = 3; zone.innerHTML = `<div class="decompte" id="dc">3</div>`; window.scrollTo(0, 0);
+      const iv = setInterval(() => {
+        if (!S || S.fini) return clearInterval(iv);
+        if (--k > 0) { const dc = $("#dc"); if (dc) dc.textContent = k; return; }
+        clearInterval(iv); zone.innerHTML = "";
+        demarrerAtelier(a, c, zone, res => bilan(a, res));
+      }, 650);
+      S.ivs.push(iv);
     };
-    Circuit.expire = () => terminer({ statut: "temps_ecoule", score: scoreGlobal(), details: st.details(), ateliers: st.res });
-    $("#stop").onclick = () => { arreterAtelier(); terminer({ statut: "echoue", score: scoreGlobal(), details: st.details(), raison: "abandon_volontaire", ateliers: st.res }); };
     const consigne = () => {
       const a = liste[st.i], c = a.cfg(L);
-      $("#ct").textContent = `Atelier ${st.i + 1} sur ${liste.length} · ${a.nom}`; majEtapes();
+      titre(); majEtapes(false);
       zone.innerHTML = `<div class="consigne">${icone(a.id)}<h2>${a.nom}</h2><p>${a.desc}</p>
         <ul class="puces">${a.consignes(c).filter(Boolean).map(x => `<li>${x}</li>`).join("")}</ul>
-        <div class="seuil">Pour valider : ${a.seuil(c)}</div>
-        <div class="actions"><button class="btn" id="go">Commencer l'atelier</button></div></div>`;
+        <div class="seuil">Pour valider : ${a.seuil(c)}, avec une note d'au moins ${NOTE_MIN} / 100</div>
+        <div class="actions"><button class="btn" id="go-atelier">Commencer l'atelier</button></div></div>`;
       window.scrollTo(0, 0);
-      $("#go").onclick = () => {
-        /* le son doit être débloqué par un geste de l'utilisateur */
-        if (a.id === "rythme") try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); c.ac.resume(); } catch (e) { c.ac = null; }
-        let k = 3; zone.innerHTML = `<div class="decompte" id="dc">3</div>`;
-        const iv = setInterval(() => {
-          if (!S || S.fini) return clearInterval(iv);
-          if (--k > 0) { $("#dc").textContent = k; return; }
-          clearInterval(iv); zone.innerHTML = "";
-          demarrerAtelier(a, c, zone, res => bilan(a, { id: a.id, nom: a.nom, ...res }));
-        }, 650);
-        S.ivs.push(iv);
-      };
-      $("#go").focus();
+      $("#go-atelier").onclick = lancerAtelier;
+      $("#go-atelier").focus();
     };
-    const bilan = (a, res) => {
-      st.res.push(res); st.i++; majEtapes();
+    const bilan = (a, brut) => {
+      const res = { id: a.id, nom: a.nom, ...brut };
+      const s = suivi[st.i]; s.essais++;
+      const ok = res.reussi && res.score >= NOTE_MIN;
+      if (ok) s.valide = { ...res, reussi: true };
+      else if (!s.meilleur || res.score > s.meilleur.score) s.meilleur = { ...res, reussi: false };
+      if (ok) st.i++;
+      majEtapes(!ok);
       const dernier = st.i >= liste.length;
-      zone.innerHTML = `<div class="bilan"><span class="etiq ${res.reussi ? "" : "ko"}">${res.reussi ? "Atelier validé" : "Atelier non validé"}</span>
-        <h2>${a.nom}</h2><p class="mesure">${res.mesure}</p><div class="pts">${res.score}<small> / 100</small></div>
-        <div class="actions"><button class="btn" id="suite">${dernier ? "Voir le résultat" : `Atelier suivant : ${liste[st.i].nom}`}</button></div></div>`;
+      const etiq = ok ? "Atelier validé" : res.reussi ? `Note inférieure à ${NOTE_MIN}` : "Atelier arrêté";
+      const reste = mmss(S.limite - Date.now());
+      zone.innerHTML = `<div class="bilan"><span class="etiq ${ok ? "" : "ko"}">${etiq}</span>
+        <h2>${a.nom}</h2><p class="mesure">${res.mesure}</p><div class="pts" ${ok ? "" : 'style="color:var(--rouge)"'}>${res.score}<small> / 100</small></div>
+        ${ok ? "" : `<p class="aide">Essai ${s.essais}. Il reste ${reste} pour recommencer et valider cet atelier avec au moins ${NOTE_MIN}&nbsp;/&nbsp;100, sans erreur.</p>`}
+        <div class="actions"><button class="btn" id="suite">${ok ? (dernier ? "Voir le résultat" : `Atelier suivant : ${liste[st.i].nom}`) : "Recommencer l'atelier"}</button></div></div>`;
       /* bref verrou : une frappe d'Espace en trop ne doit pas sauter le bilan */
       const bt = $("#suite"); bt.disabled = true;
-      bt.onclick = () => dernier ? conclure() : consigne();
-      setTimeout(() => { bt.disabled = false; bt.focus(); }, 900);
+      bt.onclick = () => ok ? (dernier ? conclure() : consigne()) : lancerAtelier();
+      setTimeout(() => { if (!document.body.contains(bt)) return; bt.disabled = false; bt.focus(); }, 500);
     };
     consigne();
   },
@@ -971,7 +1051,7 @@ function vueAccueil() {
   app.innerHTML = `
     <div class="tete">
       <div><h1>Cent niveaux<br>de technique.</h1>
-      <p class="chapo">Chaque niveau est un circuit d'ateliers : précision, réflexes, mémoire, calcul, et d'autres qui s'ajoutent en route. Il faut valider tous les ateliers du circuit pour ouvrir le niveau suivant. Une tentative dure une heure au plus, puis il faut attendre ${CONFIG.COOLDOWN_MIN / 60} heures, réussie ou non. Quitter la page pendant une épreuve l'annule aussitôt.</p></div>
+      <p class="chapo">Chaque niveau est un circuit d'ateliers : précision, réflexes, mémoire, calcul, et d'autres qui s'ajoutent en route. La moindre erreur arrête l'atelier, qui peut être recommencé tant que l'heure n'est pas écoulée ; chaque atelier doit être validé avec au moins ${NOTE_MIN} / 100 pour ouvrir le niveau suivant. Une tentative dure une heure au plus, puis il faut attendre ${CONFIG.COOLDOWN_MIN / 60} heures, réussie ou non. Quitter la page pendant une épreuve l'annule aussitôt.</p></div>
       <div class="etat"><div class="jauge"><i style="width:${p / NB * 100}%"></i></div><span>${etatTexte()}</span></div>
     </div>
     <p class="aide">Résultats transmis au nom de <b style="color:var(--texte)">${esc(email())}</b> · <a href="#" id="chg">changer d'adresse</a></p>
@@ -1008,17 +1088,18 @@ function vueIntro(n) {
     <div class="fiche">
       <div class="bloc"><h2>Le circuit : ${pl(liste.length, "atelier")}</h2><ol class="parcours">${liste.map(a => `<li><b>${a.nom}</b><span>${a.seuil(a.cfg(n))}</span></li>`).join("")}</ol></div>
       <div class="bloc danger"><h2>Avant de commencer</h2><ul class="puces">
-        <li>Tous les ateliers doivent être validés pour réussir le niveau.</li>
+        <li>Tous les ateliers doivent être validés, chacun avec une note d'au moins ${NOTE_MIN} / 100.</li>
+        <li>La moindre erreur arrête l'atelier. Vous pouvez le recommencer, avec un nouveau tirage, tant que l'heure n'est pas écoulée.</li>
         <li>Changer d'onglet ou de fenêtre, cliquer hors de l'épreuve, réduire ou recharger la page l'annule aussitôt.</li>
         <li>Durée maximale : ${CONFIG.DUREE_MAX_MIN} minutes pour tout le circuit.</li>
         <li>Pause de ${CONFIG.COOLDOWN_MIN / 60} heures après la tentative, réussie ou non.</li>
         ${liste.some(a => a.id === "rythme") ? "<li>L'atelier Rythme utilise le son : montez le volume.</li>" : ""}
       </ul></div>
     </div>
-    <div class="actions"><button class="btn" id="go">Commencer le niveau ${n}</button><a class="btn second" data-nav="/" href="${lien("/")}">Voir les niveaux</a></div>
+    <div class="actions"><button class="btn" id="go-niveau">Commencer le niveau ${n}</button><a class="btn second" data-nav="/" href="${lien("/")}">Voir les niveaux</a></div>
     <p class="aide" id="cdi"></p>`;
-  $("#go").onclick = () => lancer(n);
-  const maj = () => { const r = cooldown(), b = $("#go"); if (!b) return; b.disabled = r > 0; $("#cdi").textContent = r ? `Prochaine tentative possible dans ${hm(r)}.` : ""; };
+  $("#go-niveau").onclick = () => lancer(n);
+  const maj = () => { const r = cooldown(), b = $("#go-niveau"); if (!b) return; b.disabled = r > 0; $("#cdi").textContent = r ? `Prochaine tentative possible dans ${hm(r)}.` : ""; };
   maj(); ivVue = setInterval(maj, 15000);
 }
 const LIBELLES = { reussi: "Niveau réussi", echoue: "Niveau échoué", invalide: "Tentative annulée", temps_ecoule: "Temps écoulé" };
@@ -1027,8 +1108,8 @@ function vueResultat(r) {
   const liste = circuit(r.n);
   const exp = {
     invalide: "La page a été quittée pendant l'épreuve.",
-    temps_ecoule: "L'heure est passée.",
-    echoue: r.raison === "abandon_volontaire" ? "Vous avez arrêté l'épreuve." : "Au moins un atelier n'a pas été validé.",
+    temps_ecoule: "L'heure est passée avant que tous les ateliers soient validés.",
+    echoue: "Vous avez arrêté l'épreuve.",
     reussi: r.n < NB ? `Le niveau ${r.n + 1} est maintenant ouvert.` : "Vous avez terminé les cent niveaux."
   }[r.statut] || "";
   const suiv = r.statut === "reussi" && r.n < NB;
@@ -1037,7 +1118,7 @@ function vueResultat(r) {
       <h1>${LIBELLES[r.statut] || r.statut}</h1>
       <p class="chapo" style="margin-inline:auto">Épreuve des techniques, niveau ${r.n}. ${exp}</p>
       <div class="score" ${r.statut === "reussi" ? "" : 'style="color:var(--rouge)"'}>${r.score}<small> / 100</small></div>
-      <ul class="recap">${liste.map((a, k) => { const x = r.ateliers[k]; return `<li><i class="st ${x ? (x.reussi ? "" : "ko") : "na"}"></i><div><b>${a.nom}</b><br><span>${x ? x.mesure : "Non joué"}</span></div><b class="p">${x ? x.score : "–"}</b></li>`; }).join("")}</ul>
+      <ul class="recap">${liste.map((a, k) => { const x = r.ateliers[k]; return `<li><i class="st ${x ? (x.reussi ? "" : "ko") : "na"}"></i><div><b>${a.nom}</b><br><span>${x ? `${x.mesure} · ${pl(x.essais, "essai")}` : "Non joué"}</span></div><b class="p">${x ? x.score : "–"}</b></li>`; }).join("")}</ul>
       <p class="aide">Résultat transmis. Prochaine tentative dans ${hm(cooldown())}.</p>
       <div class="actions">
         ${suiv ? `<a class="btn" data-nav="/${r.n + 1}" href="${lien(`/${r.n + 1}`)}">Voir le niveau ${r.n + 1}</a>` : ""}
