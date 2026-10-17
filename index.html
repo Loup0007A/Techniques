@@ -216,6 +216,25 @@ canvas.trace{display:block;width:100%;border-radius:20px;background:var(--nuit2)
 .resultat code{display:block;word-break:break-all;background:var(--nuit2);padding:12px;border-radius:12px;margin-top:8px}
 
 @media (prefers-reduced-motion:reduce){.decompte,.cible::after,.impact{animation:none!important}.metro,.btn{transition:none!important}}
+/* Niveau caché 101 : le Circuit Fulgurant */
+body.c101{--acc:var(--soufre);background:radial-gradient(1100px 600px at 50% -260px,color-mix(in srgb,#F5C842 26%,transparent),transparent 72%) no-repeat,#0B0D22}
+body.c101::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:rgba(255,240,170,.0);animation:c101-flash 6s steps(1) infinite}
+@keyframes c101-flash{0%,91%{background:rgba(255,240,170,0)}92%{background:rgba(255,240,170,.10)}93%{background:rgba(255,240,170,0)}94%{background:rgba(255,240,170,.16)}96%,100%{background:rgba(255,240,170,0)}}
+.eclairs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.eclairs svg{position:absolute;width:220px;height:auto;opacity:0;filter:drop-shadow(0 0 10px #F5C842) drop-shadow(0 0 30px #FF9F5A);animation:c101-bolt 6s steps(1) infinite}
+.eclairs svg:nth-child(2){left:70%;animation-delay:-2.2s;width:160px}.eclairs svg:nth-child(3){left:40%;animation-delay:-4.1s;width:120px}
+@keyframes c101-bolt{0%,91%{opacity:0}92%,94%{opacity:1}93%{opacity:.25}96%,100%{opacity:0}}
+.cine{margin-top:30px;display:grid;gap:12px;max-width:62ch}
+.cine p{opacity:0;transform:translateY(10px);animation:c101-ligne .9s ease forwards;color:var(--doux);font-size:18px}
+.cine p b{color:var(--texte)}
+@keyframes c101-ligne{to{opacity:1;transform:none}}
+.porte101{margin:44px auto 0;max-width:760px;display:flex;align-items:center;gap:18px;padding:18px 22px;border-radius:18px;text-decoration:none;
+  background:linear-gradient(110deg,color-mix(in srgb,#F5C842 14%,var(--nuit2)),var(--nuit2));border:1px solid color-mix(in srgb,#F5C842 55%,transparent);box-shadow:0 0 40px -12px #F5C842;animation:porte101 2.4s ease-in-out infinite alternate}
+.porte101 b{font:800 30px/1 Unbounded,sans-serif;color:#F5C842;text-shadow:0 0 18px #FF9F5A}
+.porte101 span{color:var(--doux)}
+@keyframes porte101{from{box-shadow:0 0 30px -14px #F5C842}to{box-shadow:0 0 60px -6px #F5C842}}
+.gros.g101{background:linear-gradient(180deg,#FFF3B0,#F5C842 45%,#FF9F5A);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 22px rgba(245,200,66,.55))}
+main,.barre{position:relative;z-index:1}
 </style>
 <!-- S.I.D. : synchronise la progression entre appareils quand le site est ouvert depuis le S.I.D. (sans effet sinon) -->
 <script src="https://sid-quest.vercel.app/sid-sync.js" async></script>
@@ -244,6 +263,9 @@ const CONFIG = {
   SEL: "sid-quest-v2"
 };
 const NB = CONFIG.NB_NIVEAUX;
+/* Niveau caché : il n'existe que pour ceux qui ont réussi les cent premiers. */
+const N101 = NB + 1;
+const K_101 = "sqt_101";
 const RESERVES = ["epreuve","epreuve_num","niveau","statut","reussi","score","raison","details","session","debut","fin","duree_s","source","origine","parent","integre","ts","sig","email"];
 
 /* ===================== OUTILS ===================== */
@@ -302,13 +324,15 @@ function route() {
   const seg = brut.split("/").map(s => decodeURIComponent(s).replace(/\.$/, "")).filter(s => s && s !== "index.html" && s !== "techniques");
   if (!seg.length) return { vue: "accueil" };
   const n = Number(seg[seg.length === 2 && seg[0] === "niveau" ? 1 : 0]);
-  if (seg.length <= 2 && Number.isInteger(n) && n >= 1 && n <= NB && (seg.length === 1 || seg[0] === "niveau")) return { vue: "niveau", n };
+  if (seg.length <= 2 && Number.isInteger(n) && n >= 1 && (n <= NB || (n === N101 && prog() >= NB)) && (seg.length === 1 || seg[0] === "niveau")) return { vue: "niveau", n };
   return { vue: "inconnu" };
 }
 let ivVue = null;
 function rendre() {
   clearInterval(ivVue);
   const r = route();
+  document.body.classList.toggle("c101", r.vue === "niveau" && r.n === N101);
+  eclairs(r.vue === "niveau" && r.n === N101);
   majFil(r);
   window.scrollTo(0, 0);
   if (!email()) vueEmail();
@@ -316,9 +340,18 @@ function rendre() {
   else if (r.vue === "niveau") vueIntro(r.n);
   else vueInconnu();
 }
+function eclairs(on) {
+  let el = document.getElementById("eclairs");
+  if (!on) { if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement("div"); el.id = "eclairs"; el.className = "eclairs";
+  const bolt = '<svg viewBox="0 0 60 160"><path d="M38 0 L14 70 L30 70 L8 160 L52 56 L34 56 L50 0 Z" fill="#FFF6B0"/></svg>';
+  el.innerHTML = bolt + bolt + bolt;
+  document.body.prepend(el);
+}
 function majFil(r) {
   const f = $("#fil");
-  f.innerHTML = `<span class="sep">/</span><a data-nav="/" href="${lien("/")}">Techniques</a>` + (r && r.n ? `<span class="sep">/</span><span>Niveau ${r.n}</span>` : "");
+  f.innerHTML = `<span class="sep">/</span><a data-nav="/" href="${lien("/")}">Techniques</a>` + (r && r.n ? `<span class="sep">/</span><span>${r.n === N101 ? "Circuit Fulgurant" : `Niveau ${r.n}`}</span>` : "");
 }
 document.addEventListener("click", ev => {
   const a = ev.target.closest("a[data-nav]");
@@ -368,7 +401,7 @@ function lancer(n) {
   clearInterval(ivVue);
   if (!email() || !debloque(n) || cooldown() > 0) return rendre();
   const now = Date.now();
-  S = { id: uid(), n, email: email(), debut: now, fini: false, armeA: now + 600, limite: now + CONFIG.DUREE_MAX_MIN * 60000, ivs: [] };
+  S = { id: uid(), n, email: email(), debut: now, fini: false, armeA: now + 600, limite: now + (n === N101 ? 40 : CONFIG.DUREE_MAX_MIN) * 60000, ivs: [] };
   store.set(K_ACTIF, { id: S.id, n, email: S.email, debut: now });
   store.set(K_CD, now + CONFIG.COOLDOWN_MIN * 60000);
   $("#fil").classList.add("hidden");
@@ -387,7 +420,8 @@ function terminer({ statut, score = 0, details = "", raison = "", ateliers = [] 
   const fin = Date.now();
   store.set(K_CD, fin + CONFIG.COOLDOWN_MIN * 60000);
   store.del(K_ACTIF);
-  if (statut === "reussi" && S.n > prog()) store.set(K_PROG, S.n);
+  if (statut === "reussi" && S.n === N101) store.set(K_101, Date.now());
+  else if (statut === "reussi" && S.n > prog()) store.set(K_PROG, Math.min(S.n, NB));
   const r = { n: S.n, email: S.email, session: S.id, statut, score, details, raison, debut: S.debut, fin, ateliers };
   envoyer(r);
   $("#timer").classList.add("hidden"); $("#fil").classList.remove("hidden");
@@ -952,8 +986,23 @@ const Trace = {
 const ATELIERS = [Precision, Reflexes, Memoire, Calcul, Frappe, Oeil, Rythme, Chrono, Trace];
 const ATELIER = Object.fromEntries(ATELIERS.map(a => [a.id, a]));
 
+/* Niveau 101 : les neuf ateliers, chacun au-delà du niveau 100. */
+const EXTREME = {
+  precision: { n: 34, r: 10, vie: 640, vitesse: 210 },
+  reflexes: { essais: 12, seuil: 140, nogo: 0.4 },
+  memoire: { taille: 4, cible: 13, flash: 260, inverse: true },
+  calcul: { n: 28, sec: 5.5, d: 1 },
+  frappe: { long: 190, mpm: 60, accents: true, ponct: true, chiffres: true },
+  oeil: { g: 8, delta: 3, manches: 16, sec: 3.6 },
+  rythme: { bpm: 140, frappes: 18, seul: true, seuil: 40 },
+  chrono: { essais: 5, max: 22, tol: 5.5, distraction: true },
+  trace: { virages: 11, largeur: 15, limite: 20 }
+};
+const cfgDe = (a, L) => L === N101 ? { ...a.cfg(NB), ...(EXTREME[a.id] || {}) } : a.cfg(L);
+
 /* Le circuit d'un niveau est fixe : il est tiré d'une graine propre au niveau. */
 function circuit(L) {
+  if (L === N101) return shuffle([...ATELIERS], mulberry(101 * 7919 + 17));
   const rnd = mulberry(L * 7919 + 17);
   const dispo = ATELIERS.filter(a => a.min <= L);
   const n = Math.min(dispo.length, 3 + Math.floor(L / 17));
@@ -987,7 +1036,7 @@ const Circuit = {
     $("#stop").onclick = () => { arreterAtelier(); terminer({ statut: "echoue", score: scoreGlobal(), details: st.details(), raison: "abandon_volontaire", ateliers: st.recap() }); };
     const titre = () => { const a = liste[st.i]; $("#ct").textContent = `Atelier ${st.i + 1} sur ${liste.length} · ${a.nom}` + (suivi[st.i].essais ? ` · essai ${suivi[st.i].essais + 1}` : ""); };
     const lancerAtelier = () => {
-      const a = liste[st.i], c = a.cfg(L);
+      const a = liste[st.i], c = cfgDe(a, L);
       /* le son doit être débloqué par un geste de l'utilisateur */
       if (a.id === "rythme") try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); c.ac.resume(); } catch (e) { c.ac = null; }
       titre(); majEtapes(false);
@@ -1001,7 +1050,7 @@ const Circuit = {
       S.ivs.push(iv);
     };
     const consigne = () => {
-      const a = liste[st.i], c = a.cfg(L);
+      const a = liste[st.i], c = cfgDe(a, L);
       titre(); majEtapes(false);
       zone.innerHTML = `<div class="consigne">${icone(a.id)}<h2>${a.nom}</h2><p>${a.desc}</p>
         <ul class="puces">${a.consignes(c).filter(Boolean).map(x => `<li>${x}</li>`).join("")}</ul>
@@ -1021,6 +1070,14 @@ const Circuit = {
       majEtapes(!ok);
       const dernier = st.i >= liste.length;
       const etiq = ok ? "Atelier validé" : res.reussi ? `Note inférieure à ${NOTE_MIN}` : "Atelier arrêté";
+      if (!ok && L === N101) {
+        zone.innerHTML = `<div class="bilan"><span class="etiq ko">Le circuit ne pardonne pas</span>
+          <h2>${a.nom}</h2><p class="mesure">${res.mesure}</p><div class="pts" style="color:var(--rouge)">${res.score}<small> / 100</small></div>
+          <p class="aide">Au cent-unième circuit, une seule erreur suffit : la foudre retombe.</p>
+          <div class="actions"><button class="btn" id="suite">Voir le résultat</button></div></div>`;
+        $("#suite").onclick = () => terminer({ statut: "echoue", score: scoreGlobal(), details: st.details(), raison: "atelier_rate", ateliers: st.recap() });
+        return;
+      }
       const reste = mmss(S.limite - Date.now());
       zone.innerHTML = `<div class="bilan"><span class="etiq ${ok ? "" : "ko"}">${etiq}</span>
         <h2>${a.nom}</h2><p class="mesure">${res.mesure}</p><div class="pts" ${ok ? "" : 'style="color:var(--rouge)"'}>${res.score}<small> / 100</small></div>
@@ -1059,6 +1116,7 @@ function vueAccueil() {
     <p class="aide">Résultats transmis au nom de <b style="color:var(--texte)">${esc(email())}</b> · <a href="#" id="chg">changer d'adresse</a></p>
     <div class="bandeau hidden" id="cdb"></div>
     <div class="actions">${p < NB ? `<a class="btn" data-nav="/${p + 1}" href="${lien(`/${p + 1}`)}">Aller au niveau ${p + 1}</a>` : ""}</div>
+    ${p >= NB ? `<a class="porte101" data-nav="/${N101}" href="${lien(`/${N101}`)}"><b>101</b><span>${store.get(K_101) ? "Vous avez dompté le Circuit Fulgurant. Il gronde encore, pour qui veut le revivre." : "Sous la carte, un cent-unième circuit gronde. Il ne s'ouvre qu'à ceux qui ont tout réussi."}</span></a>` : ""}
     <div class="carte">
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <polyline points="${ligne(pos)}" fill="none" stroke="var(--trait)" stroke-width=".5" stroke-linejoin="round"/>
@@ -1076,7 +1134,36 @@ function vueAccueil() {
   const maj = () => { const r = cooldown(), b = $("#cdb"); if (!b) return; b.classList.toggle("hidden", !r); b.textContent = r ? `Prochaine tentative possible dans ${hm(r)}.` : ""; };
   maj(); ivVue = setInterval(maj, 15000);
 }
+function vueIntro101() {
+  const n = N101, liste = circuit(n);
+  app.innerHTML = `<div class="nv-tete"><div class="gros g101">101</div><div><h1>Le Circuit Fulgurant</h1><p>Niveau caché</p>
+      <div class="diff">${Array.from({ length: 12 }, () => '<i class="on"></i>').join("")}</div></div></div>
+    <div class="cine">
+      <p style="animation-delay:.2s">Cent circuits. Vous les avez tous traversés.</p>
+      <p style="animation-delay:1.4s">Mais sous la carte, quelque chose gronde depuis le début.</p>
+      <p style="animation-delay:2.8s"><b>Les neuf ateliers, d'une traite. Plus durs qu'au niveau 100.</b></p>
+      <p style="animation-delay:4.2s"><b>Aucun droit à l'erreur : un seul atelier raté, et la foudre retombe.</b></p>
+      <p style="animation-delay:5.6s">Ceux qui en reviennent portent un autre nom au S.I.D.</p>
+    </div>
+    <div class="fiche" style="margin-top:34px">
+      <div class="bloc"><h2>Le circuit : ${pl(liste.length, "atelier")}</h2><ol class="parcours">${liste.map(a => `<li><b>${a.nom}</b><span>${a.seuil(cfgDe(a, n))}</span></li>`).join("")}</ol></div>
+      <div class="bloc danger"><h2>Les règles du 101</h2><ul class="puces">
+        <li>Chaque atelier doit être validé du premier coup, avec au moins ${NOTE_MIN} / 100 et sans erreur.</li>
+        <li>Un atelier raté met fin à la tentative : pas de second essai.</li>
+        <li>Changer d'onglet ou de fenêtre, cliquer hors de l'épreuve ou recharger la page l'annule aussitôt.</li>
+        <li>Durée maximale : 40 minutes pour les neuf ateliers.</li>
+        <li>Pause de ${CONFIG.COOLDOWN_MIN / 60} heures après la tentative, réussie ou non.</li>
+        <li>L'atelier Rythme utilise le son : montez le volume.</li>
+      </ul></div>
+    </div>
+    <div class="actions"><button class="btn" id="go-niveau">⚡ Entrer dans le circuit</button><a class="btn second" data-nav="/" href="${lien("/")}">Voir les niveaux</a></div>
+    <p class="aide" id="cdi"></p>`;
+  $("#go-niveau").onclick = () => lancer(n);
+  const maj = () => { const r = cooldown(), b = $("#go-niveau"); if (!b) return; b.disabled = r > 0; $("#cdi").textContent = r ? `Prochaine tentative possible dans ${hm(r)}.` : ""; };
+  maj(); ivVue = setInterval(maj, 15000);
+}
 function vueIntro(n) {
+  if (n === N101) return vueIntro101();
   const niv = Math.ceil(n / 10);
   const diff = `<div class="diff" aria-label="Difficulté ${niv} sur 10">${Array.from({ length: 10 }, (_, i) => `<i class="${i < niv ? "on" : ""}"></i>`).join("")}</div>`;
   const tete = `<div class="nv-tete"><div class="gros">${n}</div><div><h1>Épreuve des techniques</h1><p>Niveau ${n} sur ${NB}</p>${diff}</div></div>`;
@@ -1108,17 +1195,18 @@ const LIBELLES = { reussi: "Niveau réussi", echoue: "Niveau échoué", invalide
 function vueResultat(r) {
   clearInterval(ivVue);
   const liste = circuit(r.n);
-  const exp = {
+  let exp = {
     invalide: "La page a été quittée pendant l'épreuve.",
     temps_ecoule: "L'heure est passée avant que tous les ateliers soient validés.",
     echoue: "Vous avez arrêté l'épreuve.",
-    reussi: r.n < NB ? `Le niveau ${r.n + 1} est maintenant ouvert.` : "Vous avez terminé les cent niveaux."
+    reussi: r.n === N101 ? "Vous avez dompté le Circuit Fulgurant. Ouvert depuis le S.I.D., ce résultat vous vaut le titre « Éclair Vivant »." : r.n < NB ? `Le niveau ${r.n + 1} est maintenant ouvert.` : "Vous avez terminé les cent niveaux… mais la carte semble cacher autre chose."
   }[r.statut] || "";
+  if (r.statut === "echoue" && r.raison === "atelier_rate") exp = "Un atelier raté : au cent-unième circuit, c'est la fin de la tentative.";
   const suiv = r.statut === "reussi" && r.n < NB;
   app.innerHTML = `
     <div class="resultat">
       <h1>${LIBELLES[r.statut] || r.statut}</h1>
-      <p class="chapo" style="margin-inline:auto">Épreuve des techniques, niveau ${r.n}. ${exp}</p>
+      <p class="chapo" style="margin-inline:auto">Épreuve des techniques, ${r.n === N101 ? "Circuit Fulgurant (niveau 101)" : `niveau ${r.n}`}. ${exp}</p>
       <div class="score" ${r.statut === "reussi" ? "" : 'style="color:var(--rouge)"'}>${r.score}<small> / 100</small></div>
       <ul class="recap">${liste.map((a, k) => { const x = r.ateliers[k]; return `<li><i class="st ${x ? (x.reussi ? "" : "ko") : "na"}"></i><div><b>${a.nom}</b><br><span>${x ? `${x.mesure} · ${pl(x.essais, "essai")}` : "Non joué"}</span></div><b class="p">${x ? x.score : "–"}</b></li>`; }).join("")}</ul>
       <p class="aide">Résultat transmis. Prochaine tentative dans ${hm(cooldown())}.</p>
